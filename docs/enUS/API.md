@@ -27,6 +27,14 @@ Returns service and Redis health (via health-kit).
 
 ---
 
+### Metrics
+
+**GET /metrics**
+
+Returns Prometheus/OpenMetrics metrics (verify_total, enroll_start_total, enroll_confirm_total). No authentication required for this endpoint.
+
+---
+
 ### Start enrollment
 
 **POST /v1/enroll/start**

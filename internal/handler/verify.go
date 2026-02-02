@@ -8,6 +8,7 @@ import (
 	secure "github.com/soulteary/secure-kit"
 
 	"github.com/soulteary/herald-totp/internal/config"
+	"github.com/soulteary/herald-totp/internal/metrics"
 	"github.com/soulteary/herald-totp/internal/secret"
 	"github.com/soulteary/herald-totp/internal/store"
 	"github.com/soulteary/herald-totp/internal/totp"
@@ -58,6 +59,7 @@ func Verify(st *store.Store, log *logger.Logger) fiber.Handler {
 				})
 			}
 			if used {
+				metrics.RecordVerify("failure", "replay")
 				return c.Status(fiber.StatusBadRequest).JSON(VerifyErrorResponse{
 					OK: false, Reason: "replay",
 				})
@@ -67,12 +69,14 @@ func Verify(st *store.Store, log *logger.Logger) fiber.Handler {
 		// Rate limit
 		subjectCount, _ := st.IncrRateSubject(c.Context(), req.Subject)
 		if subjectCount > int64(config.RateLimitPerSubject) {
+			metrics.RecordVerify("failure", "rate_limited")
 			return c.Status(fiber.StatusTooManyRequests).JSON(VerifyErrorResponse{
 				OK: false, Reason: "rate_limited",
 			})
 		}
 		ipCount, _ := st.IncrRateIP(c.Context(), c.IP())
 		if ipCount > int64(config.RateLimitPerIP) {
+			metrics.RecordVerify("failure", "rate_limited")
 			return c.Status(fiber.StatusTooManyRequests).JSON(VerifyErrorResponse{
 				OK: false, Reason: "rate_limited",
 			})
@@ -85,6 +89,7 @@ func Verify(st *store.Store, log *logger.Logger) fiber.Handler {
 			})
 		}
 		if cred == nil || !cred.Enabled {
+			metrics.RecordVerify("failure", "invalid")
 			return c.Status(fiber.StatusBadRequest).JSON(VerifyErrorResponse{
 				OK: false, Reason: "invalid",
 			})
@@ -112,12 +117,14 @@ func Verify(st *store.Store, log *logger.Logger) fiber.Handler {
 			codeHash := secure.GetSHA256Hash(normalizeBackupCode(req.Code))
 			consumed, _ := st.ConsumeBackupCode(c.Context(), req.Subject, codeHash)
 			if consumed {
+				metrics.RecordVerify("success", "backup_code")
 				if req.ChallengeID != "" {
 					_ = st.MarkChallengeUsed(c.Context(), req.ChallengeID)
 				}
 				issuedAt := time.Now().Unix()
 				return c.JSON(VerifyResponse{OK: true, Subject: req.Subject, AMR: []string{"totp", "backup_code"}, IssuedAt: issuedAt})
 			}
+			metrics.RecordVerify("failure", "invalid")
 			return c.Status(fiber.StatusUnauthorized).JSON(VerifyErrorResponse{
 				OK: false, Reason: "invalid",
 			})
@@ -125,6 +132,7 @@ func Verify(st *store.Store, log *logger.Logger) fiber.Handler {
 
 		step := totp.TimeStep(now, uint(cred.Period))
 		if step <= cred.LastUsedStep {
+			metrics.RecordVerify("failure", "replay")
 			return c.Status(fiber.StatusBadRequest).JSON(VerifyErrorResponse{
 				OK: false, Reason: "replay",
 			})
@@ -138,6 +146,7 @@ func Verify(st *store.Store, log *logger.Logger) fiber.Handler {
 				OK: false, Reason: "internal_error",
 			})
 		}
+		metrics.RecordVerify("success", "totp")
 		if req.ChallengeID != "" {
 			_ = st.MarkChallengeUsed(c.Context(), req.ChallengeID)
 		}
