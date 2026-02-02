@@ -67,6 +67,7 @@ func Setup(app *fiber.App, log *logger.Logger) (*store.Store, error) {
 	v1.Post("/enroll/start", authHandler, handler.EnrollStart(st, log))
 	v1.Post("/enroll/confirm", authHandler, handler.EnrollConfirm(st, log))
 	v1.Post("/verify", authHandler, handler.Verify(st, log))
+	v1.Post("/revoke", authHandler, handler.Revoke(st))
 	v1.Get("/status", authHandler, handler.Status(st))
 
 	return st, nil

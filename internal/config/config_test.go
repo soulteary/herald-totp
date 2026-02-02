@@ -1,6 +1,7 @@
 package config
 
 import (
+	"os"
 	"testing"
 
 	logger "github.com/soulteary/logger-kit"
@@ -32,4 +33,39 @@ func TestHasHMACKeys(t *testing.T) {
 
 func TestAllowNoAuth(t *testing.T) {
 	_ = AllowNoAuth()
+}
+
+func TestParseBoolEnv(t *testing.T) {
+	key := "HERALD_TOTP_TEST_BOOL_" + t.Name()
+	defer func() { _ = os.Unsetenv(key) }()
+
+	// unset -> default true
+	if got := ParseBoolEnv(key, true); !got {
+		t.Errorf("ParseBoolEnv(unset, true) = false, want true")
+	}
+	if got := ParseBoolEnv(key, false); got {
+		t.Errorf("ParseBoolEnv(unset, false) = true, want false")
+	}
+
+	// "true" / "1" / "yes" -> true
+	for _, v := range []string{"true", "TRUE", "1", "yes", "YES"} {
+		_ = os.Setenv(key, v)
+		if got := ParseBoolEnv(key, false); !got {
+			t.Errorf("ParseBoolEnv(%q, false) = false, want true", v)
+		}
+	}
+
+	// "false" / "0" / other -> false
+	for _, v := range []string{"false", "FALSE", "0", "no", "x"} {
+		_ = os.Setenv(key, v)
+		if got := ParseBoolEnv(key, true); got {
+			t.Errorf("ParseBoolEnv(%q, true) = true, want false", v)
+		}
+	}
+
+	// empty string after trim -> default
+	_ = os.Setenv(key, "  ")
+	if got := ParseBoolEnv(key, true); !got {
+		t.Errorf("ParseBoolEnv(space, true) = false, want true")
+	}
 }

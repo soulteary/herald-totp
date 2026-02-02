@@ -13,7 +13,8 @@ TOTP 2FA service for the Herald/Stargate stack: **enroll** (bind), **verify**, a
 ## Core Features
 
 - **Enroll**: `POST /v1/enroll/start` (returns QR content) and `POST /v1/enroll/confirm` (confirm with one TOTP code).
-- **Verify**: `POST /v1/verify` (TOTP or backup code), with optional `challenge_id` for replay protection.
+- **Verify**: `POST /v1/verify` (TOTP or backup code), returns `subject`, `amr`, `issued_at`; optional `challenge_id` for replay protection.
+- **Revoke**: `POST /v1/revoke` to remove TOTP credential and backup codes for a subject.
 - **Status**: `GET /v1/status?subject=...` to check if a user has TOTP enabled.
 - **Backup codes**: 10 one-time codes returned on confirm; can be used in verify when the device is lost.
 - **Security**: Encrypted secret storage (AES-GCM), rate limiting, time-step replay protection, API key or HMAC auth.
@@ -21,9 +22,10 @@ TOTP 2FA service for the Herald/Stargate stack: **enroll** (bind), **verify**, a
 
 ## Protocol
 
-- **POST /v1/enroll/start** – Start enrollment; returns `enroll_id`, `otpauth_uri`.
+- **POST /v1/enroll/start** – Start enrollment; returns `enroll_id`, `otpauth_uri` (and optionally `secret_base32`).
 - **POST /v1/enroll/confirm** – Submit TOTP code to confirm; returns `backup_codes`.
-- **POST /v1/verify** – Verify TOTP or backup code.
+- **POST /v1/verify** – Verify TOTP or backup code; returns `ok`, `subject`, `amr`, `issued_at`.
+- **POST /v1/revoke** – Remove TOTP and backup codes for a subject.
 - **GET /v1/status?subject=...** – Check if TOTP is enabled for subject.
 - **GET /healthz** – Service and Redis health (via [health-kit](https://github.com/soulteary/health-kit)).
 
@@ -36,6 +38,7 @@ TOTP 2FA service for the Herald/Stargate stack: **enroll** (bind), **verify**, a
 | `API_KEY` | If set, callers must send `X-API-Key` | `` | No |
 | `HMAC_SECRET` / `HERALD_TOTP_HMAC_KEYS` | HMAC auth | `` | No |
 | `REDIS_ADDR` | Redis address | `localhost:6379` | Yes |
+| `EXPOSE_SECRET_IN_ENROLL` | If false, omit `secret_base32` in enroll/start response | `true` | No |
 | `LOG_LEVEL` | Log level: trace, debug, info, warn, error | `info` | No |
 
 See [docs/enUS/DEPLOYMENT.md](docs/enUS/DEPLOYMENT.md) for full options.

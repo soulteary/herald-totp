@@ -126,6 +126,46 @@ func TestEnrollStart_Success(t *testing.T) {
 	}
 }
 
+func TestEnrollStart_ExposeSecretInEnrollFalse(t *testing.T) {
+	st, mr, log := setupHandlerTest(t)
+	defer mr.Close()
+	oldKey := config.EncryptionKey
+	oldExpose := config.ExposeSecretInEnroll
+	config.EncryptionKey = testEncryptionKey
+	config.ExposeSecretInEnroll = false
+	config.RateLimitPerSubject = 100
+	config.RateLimitPerIP = 100
+	defer func() {
+		config.EncryptionKey = oldKey
+		config.ExposeSecretInEnroll = oldExpose
+		config.RateLimitPerSubject = 20
+		config.RateLimitPerIP = 30
+	}()
+
+	app := fiber.New()
+	app.Post("/enroll/start", EnrollStart(st, log))
+	body := `{"subject":"nosecret","label":"u"}`
+	req := httptest.NewRequest("POST", "/enroll/start", bytes.NewReader([]byte(body)))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	if resp.StatusCode != 200 {
+		t.Errorf("status = %d, want 200", resp.StatusCode)
+	}
+	var out EnrollStartResponse
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if out.SecretBase32 != "" {
+		t.Errorf("ExposeSecretInEnroll=false: SecretBase32 should be empty, got %q", out.SecretBase32)
+	}
+	if out.OtpauthURI == "" || out.EnrollID == "" {
+		t.Errorf("OtpauthURI and EnrollID should be set: EnrollID=%q OtpauthURI=%q", out.EnrollID, out.OtpauthURI)
+	}
+}
+
 func TestEnrollConfirm_BadRequest(t *testing.T) {
 	st, mr, log := setupHandlerTest(t)
 	defer mr.Close()
@@ -284,6 +324,15 @@ func TestVerify_Success(t *testing.T) {
 	if !vOut.OK {
 		t.Error("VerifyResponse.OK = false")
 	}
+	if vOut.Subject != "vuser" {
+		t.Errorf("VerifyResponse.Subject = %q, want vuser", vOut.Subject)
+	}
+	if len(vOut.AMR) == 0 || vOut.AMR[0] != "totp" {
+		t.Errorf("VerifyResponse.AMR = %v, want [totp]", vOut.AMR)
+	}
+	if vOut.IssuedAt <= 0 {
+		t.Errorf("VerifyResponse.IssuedAt = %d, want > 0", vOut.IssuedAt)
+	}
 }
 
 func TestStatus_BadRequest(t *testing.T) {
@@ -434,5 +483,119 @@ func TestEnrollStart_RateLimited(t *testing.T) {
 	resp, _ := app.Test(req)
 	if resp.StatusCode != 429 {
 		t.Errorf("status = %d, want 429 (rate_limited)", resp.StatusCode)
+	}
+}
+
+func TestVerify_BackupCodeSuccess(t *testing.T) {
+	st, mr, log := setupHandlerTest(t)
+	defer mr.Close()
+	config.EncryptionKey = testEncryptionKey
+	config.RateLimitPerSubject = 100
+	config.RateLimitPerIP = 100
+	defer func() { config.EncryptionKey = "" }()
+	app := fiber.New()
+	app.Post("/enroll/start", EnrollStart(st, log))
+	app.Post("/enroll/confirm", EnrollConfirm(st, log))
+	app.Post("/verify", Verify(st, log))
+	// Enroll user to get backup codes
+	req := httptest.NewRequest("POST", "/enroll/start", bytes.NewReader([]byte(`{"subject":"backupuser","label":"bu"}`)))
+	req.Header.Set("Content-Type", "application/json")
+	resp, _ := app.Test(req)
+	if resp.StatusCode != 200 {
+		t.Fatalf("enroll start = %d", resp.StatusCode)
+	}
+	var startOut EnrollStartResponse
+	_ = json.NewDecoder(resp.Body).Decode(&startOut)
+	code, _ := pqtotp.GenerateCodeCustom(startOut.SecretBase32, time.Now(), pqtotp.ValidateOpts{
+		Period: uint(config.TOTPPeriod), Skew: uint(config.TOTPSkew),
+		Digits: totp.DigitsFromInt(config.TOTPDigits), Algorithm: totp.AlgorithmSHA1,
+	})
+	confirmBody, _ := json.Marshal(EnrollConfirmRequest{EnrollID: startOut.EnrollID, Code: code})
+	req = httptest.NewRequest("POST", "/enroll/confirm", bytes.NewReader(confirmBody))
+	req.Header.Set("Content-Type", "application/json")
+	resp, _ = app.Test(req)
+	if resp.StatusCode != 200 {
+		t.Fatalf("enroll confirm = %d", resp.StatusCode)
+	}
+	var confirmOut EnrollConfirmResponse
+	_ = json.NewDecoder(resp.Body).Decode(&confirmOut)
+	if len(confirmOut.BackupCodes) == 0 {
+		t.Fatal("no backup codes returned")
+	}
+	backupCode := confirmOut.BackupCodes[0]
+	verifyBody, _ := json.Marshal(VerifyRequest{Subject: "backupuser", Code: backupCode})
+	req = httptest.NewRequest("POST", "/verify", bytes.NewReader(verifyBody))
+	req.Header.Set("Content-Type", "application/json")
+	resp, _ = app.Test(req)
+	if resp.StatusCode != 200 {
+		t.Errorf("verify with backup code status = %d, want 200", resp.StatusCode)
+	}
+	var vOut VerifyResponse
+	_ = json.NewDecoder(resp.Body).Decode(&vOut)
+	if !vOut.OK || vOut.Subject != "backupuser" {
+		t.Errorf("VerifyResponse = %+v", vOut)
+	}
+}
+
+func TestRevoke_BadRequest(t *testing.T) {
+	st, mr, _ := setupHandlerTest(t)
+	defer mr.Close()
+	app := fiber.New()
+	app.Post("/revoke", Revoke(st))
+	req := httptest.NewRequest("POST", "/revoke", bytes.NewReader([]byte(`{}`)))
+	req.Header.Set("Content-Type", "application/json")
+	resp, _ := app.Test(req)
+	if resp.StatusCode != 400 {
+		t.Errorf("status = %d, want 400", resp.StatusCode)
+	}
+}
+
+func TestRevoke_Success(t *testing.T) {
+	st, mr, _ := setupHandlerTest(t)
+	defer mr.Close()
+	ctx := context.Background()
+	config.RateLimitPerSubject = 100
+	config.RateLimitPerIP = 100
+	defer func() { config.RateLimitPerSubject = 20; config.RateLimitPerIP = 30 }()
+	cred := &store.Credential{Subject: "revuser", SecretEnc: "enc", Issuer: "Herald", Label: "revuser", Period: 30, Digits: 6, Algo: "SHA1", Enabled: true, CreatedAt: 1, UpdatedAt: 1}
+	_ = st.SaveCredential(ctx, cred)
+	entries := []store.BackupCodeEntry{{CodeHash: "h1", UsedAt: 0}}
+	_ = st.SaveBackupCodes(ctx, "revuser", entries)
+	app := fiber.New()
+	app.Post("/revoke", Revoke(st))
+	req := httptest.NewRequest("POST", "/revoke", bytes.NewReader([]byte(`{"subject":"revuser"}`)))
+	req.Header.Set("Content-Type", "application/json")
+	resp, _ := app.Test(req)
+	if resp.StatusCode != 200 {
+		t.Errorf("status = %d, want 200", resp.StatusCode)
+	}
+	var out RevokeResponse
+	_ = json.NewDecoder(resp.Body).Decode(&out)
+	if !out.OK || out.Subject != "revuser" {
+		t.Errorf("RevokeResponse = %+v", out)
+	}
+	credGot, _ := st.GetCredential(ctx, "revuser")
+	if credGot != nil {
+		t.Error("credential should be deleted after revoke")
+	}
+	codesGot, _ := st.GetBackupCodes(ctx, "revuser")
+	if codesGot != nil {
+		t.Error("backup codes should be deleted after revoke")
+	}
+}
+
+func TestRevoke_RateLimited(t *testing.T) {
+	st, mr, _ := setupHandlerTest(t)
+	defer mr.Close()
+	config.RateLimitPerSubject = 0
+	config.RateLimitPerIP = 100
+	defer func() { config.RateLimitPerSubject = 20; config.RateLimitPerIP = 30 }()
+	app := fiber.New()
+	app.Post("/revoke", Revoke(st))
+	req := httptest.NewRequest("POST", "/revoke", bytes.NewReader([]byte(`{"subject":"rateuser"}`)))
+	req.Header.Set("Content-Type", "application/json")
+	resp, _ := app.Test(req)
+	if resp.StatusCode != 429 {
+		t.Errorf("revoke rate limited status = %d, want 429", resp.StatusCode)
 	}
 }

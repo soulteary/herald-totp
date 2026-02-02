@@ -17,15 +17,11 @@ func Status(st *store.Store) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		subject := c.Query("subject")
 		if subject == "" {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"ok": false, "reason": "invalid_request", "message": "subject is required",
-			})
+			return respondBadRequest(c, "invalid_request", "subject is required")
 		}
 		cred, err := st.GetCredential(c.Context(), subject)
 		if err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"ok": false, "reason": "internal_error",
-			})
+			return respondInternalError(c)
 		}
 		enabled := cred != nil && cred.Enabled
 		return c.JSON(StatusResponse{

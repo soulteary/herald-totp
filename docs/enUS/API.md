@@ -48,6 +48,7 @@ Generate a TOTP secret and return `enroll_id` and `otpauth_uri` for the frontend
   "otpauth_uri": "otpauth://totp/Issuer:label?secret=...&issuer=Issuer&period=30&digits=6"
 }
 ```
+When `EXPOSE_SECRET_IN_ENROLL=false`, `secret_base32` is omitted (only `otpauth_uri` for QR).
 
 **Errors:** `400` invalid_request (e.g. subject empty), `429` rate_limited, `500` config_error / internal_error.
 
@@ -96,9 +97,13 @@ Verify a TOTP code (or backup code) for login.
 **Response (200):**
 ```json
 {
-  "ok": true
+  "ok": true,
+  "subject": "user:12345",
+  "amr": ["totp"],
+  "issued_at": 1706789012
 }
 ```
+When verified via backup code, `amr` is `["totp", "backup_code"]`.
 
 **Error response (4xx):**
 ```json
@@ -107,6 +112,30 @@ Verify a TOTP code (or backup code) for login.
   "reason": "invalid" | "expired" | "replay" | "rate_limited"
 }
 ```
+
+---
+
+### Revoke TOTP
+
+**POST /v1/revoke**
+
+Remove TOTP credential and backup codes for the subject (disenroll).
+
+**Request body:**
+
+| Field   | Type   | Required | Description        |
+|--------|--------|----------|--------------------|
+| subject| string | Yes      | User identifier.   |
+
+**Response (200):**
+```json
+{
+  "ok": true,
+  "subject": "user:12345"
+}
+```
+
+**Errors:** `400` invalid_request (subject missing), `429` rate_limited.
 
 ---
 

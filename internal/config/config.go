@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/soulteary/cli-kit/env"
@@ -43,6 +44,9 @@ var (
 	// Rate limit
 	RateLimitPerSubject = env.GetInt("RATE_LIMIT_PER_SUBJECT", 20) // per hour
 	RateLimitPerIP      = env.GetInt("RATE_LIMIT_PER_IP", 30)      // per minute
+
+	// Enroll response: when false, do not return secret_base32 (only otpauth_uri for QR)
+	ExposeSecretInEnroll = ParseBoolEnv("EXPOSE_SECRET_IN_ENROLL", true)
 )
 
 // Initialize sets the logger and parses HMAC keys if present.
@@ -62,6 +66,15 @@ func Initialize(l *logger.Logger) {
 
 func parseHMACKeys() error {
 	return json.Unmarshal([]byte(HMACKeysJSON), &hmacKeysMap)
+}
+
+// ParseBoolEnv reads an env var as bool: "true"/"1"/"yes" (case-insensitive) = true, "false"/"0"/etc = false, empty = defaultVal.
+func ParseBoolEnv(key string, defaultVal bool) bool {
+	v := strings.ToLower(strings.TrimSpace(env.Get(key, "")))
+	if v == "" {
+		return defaultVal
+	}
+	return v == "true" || v == "1" || v == "yes"
 }
 
 // GetHMACSecret returns the HMAC secret for the given key ID.

@@ -48,6 +48,7 @@ http://localhost:8084
   "otpauth_uri": "otpauth://totp/Issuer:label?secret=...&issuer=Issuer&period=30&digits=6"
 }
 ```
+当 `EXPOSE_SECRET_IN_ENROLL=false` 时，不返回 `secret_base32`（仅返回用于二维码的 `otpauth_uri`）。
 
 **错误：** `400` invalid_request，`429` rate_limited，`500` config_error / internal_error。
 
@@ -96,9 +97,13 @@ http://localhost:8084
 **响应（200）：**
 ```json
 {
-  "ok": true
+  "ok": true,
+  "subject": "user:12345",
+  "amr": ["totp"],
+  "issued_at": 1706789012
 }
 ```
+使用恢复码验证时，`amr` 为 `["totp", "backup_code"]`。
 
 **错误响应（4xx）：**
 ```json
@@ -107,6 +112,30 @@ http://localhost:8084
   "reason": "invalid" | "expired" | "replay" | "rate_limited"
 }
 ```
+
+---
+
+### 解除 TOTP 绑定
+
+**POST /v1/revoke**
+
+移除该用户的 TOTP 凭证与恢复码（解绑）。
+
+**请求体：**
+
+| 字段   | 类型   | 必填 | 说明        |
+|--------|--------|------|-------------|
+| subject| string | 是  | 用户标识。  |
+
+**响应（200）：**
+```json
+{
+  "ok": true,
+  "subject": "user:12345"
+}
+```
+
+**错误：** `400` invalid_request（缺少 subject），`429` rate_limited。
 
 ---
 

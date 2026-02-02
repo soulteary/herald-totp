@@ -13,7 +13,8 @@ herald-totp 是 Herald/Stargate 栈的 TOTP 双因素认证服务：**绑定（e
 ## 核心特性
 
 - **绑定**：`POST /v1/enroll/start`（返回二维码内容）与 `POST /v1/enroll/confirm`（用一次 TOTP 码确认）。
-- **验证**：`POST /v1/verify`（TOTP 或恢复码），可选 `challenge_id` 防重放。
+- **验证**：`POST /v1/verify`（TOTP 或恢复码），返回 `subject`、`amr`、`issued_at`；可选 `challenge_id` 防重放。
+- **解绑**：`POST /v1/revoke` 移除该用户的 TOTP 凭证与恢复码。
 - **状态**：`GET /v1/status?subject=...` 查询用户是否已开启 TOTP。
 - **恢复码**：确认绑定后返回 10 个一次性码，设备丢失时可用来验证。
 - **安全**：加密存储密钥（AES-GCM）、限流、时间步防重放、API Key 或 HMAC 鉴权。
@@ -28,9 +29,10 @@ herald-totp 是 Herald/Stargate 栈的 TOTP 双因素认证服务：**绑定（e
 
 ## 协议
 
-- **POST /v1/enroll/start**：开始绑定，返回 `enroll_id`、`otpauth_uri`。
+- **POST /v1/enroll/start**：开始绑定，返回 `enroll_id`、`otpauth_uri`（可选 `secret_base32`）。
 - **POST /v1/enroll/confirm**：提交 TOTP 码确认绑定，返回 `backup_codes`。
-- **POST /v1/verify**：验证 TOTP 或恢复码。
+- **POST /v1/verify**：验证 TOTP 或恢复码，返回 `ok`、`subject`、`amr`、`issued_at`。
+- **POST /v1/revoke**：解除该用户的 TOTP 与恢复码。
 - **GET /v1/status?subject=...**：查询 TOTP 是否已开启。
 - **GET /healthz**：健康检查（含 Redis）。
 
@@ -43,6 +45,7 @@ herald-totp 是 Herald/Stargate 栈的 TOTP 双因素认证服务：**绑定（e
 | `API_KEY` | 若设置，调用方需在 `X-API-Key` 中携带 | `` | 否 |
 | `HMAC_SECRET` / `HERALD_TOTP_HMAC_KEYS` | HMAC 鉴权 | `` | 否 |
 | `REDIS_ADDR` | Redis 地址 | `localhost:6379` | 是 |
+| `EXPOSE_SECRET_IN_ENROLL` | 为 false 时 enroll/start 不返回 `secret_base32` | `true` | 否 |
 | `LOG_LEVEL` | 日志级别：trace, debug, info, warn, error | `info` | 否 |
 
 更多见 [docs/zhCN/DEPLOYMENT.md](docs/zhCN/DEPLOYMENT.md)。

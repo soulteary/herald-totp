@@ -8,6 +8,8 @@ This guide helps you diagnose and resolve common issues with herald-totp.
 - [401 Unauthorized](#401-unauthorized)
 - [Verify Returns invalid / expired / replay / rate_limited](#verify-returns-invalid--expired--replay--rate_limited)
 - [Enroll Confirm Returns expired or invalid](#enroll-confirm-returns-expired-or-invalid)
+- [Revoke Returns 400 or 429](#revoke-returns-400-or-429)
+- [Enroll Response: No secret_base32](#enroll-response-no-secret_base32)
 - [Redis Connection Errors](#redis-connection-errors)
 - [Stargate Cannot Reach herald-totp](#stargate-cannot-reach-herald-totp)
 
@@ -81,6 +83,36 @@ herald-totp has `API_KEY` (or HMAC) set, but the request either does not send th
 
 - **expired**: The enroll_id from `POST /v1/enroll/start` has expired (default TTL 10m). The user must start enrollment again: call enroll/start and have the user scan the new QR code, then submit the new code to enroll/confirm.
 - **invalid**: The 6-digit TOTP code submitted does not match the current TOTP for the temporary secret. Ensure the user’s authenticator app time is in sync and they enter the current code. Check that TOTP period (default 30s) and skew are consistent.
+
+---
+
+## Revoke Returns 400 or 429
+
+### Symptoms
+
+- `POST /v1/revoke` returns 400 with `reason: "invalid_request"` (e.g. subject required), or 429 with `reason: "rate_limited"`.
+
+### Causes and Solutions
+
+- **400 invalid_request**: Request body must include `subject` (user identifier). Send `{"subject": "user:12345"}`.
+- **429 rate_limited**: Per-subject or per-IP limit exceeded. Wait for the window to reset or adjust `RATE_LIMIT_PER_SUBJECT` / `RATE_LIMIT_PER_IP`.
+
+---
+
+## Enroll Response: No secret_base32
+
+### Symptoms
+
+- `POST /v1/enroll/start` returns 200 but the response does not contain `secret_base32`, only `enroll_id` and `otpauth_uri`.
+
+### Cause
+
+`EXPOSE_SECRET_IN_ENROLL` is set to `false` (or `0` / `no`). This is intentional for production to avoid exposing the raw secret; only the `otpauth_uri` is provided for QR code generation.
+
+### Solutions
+
+- If you need the secret (e.g. for manual entry), set `EXPOSE_SECRET_IN_ENROLL=true` (default). Use only in trusted or dev environments.
+- If you want to hide the secret, keep it `false` and use only `otpauth_uri` for the QR code.
 
 ---
 

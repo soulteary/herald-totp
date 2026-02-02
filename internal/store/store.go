@@ -103,6 +103,16 @@ func (s *Store) GetCredential(ctx context.Context, subject string) (*Credential,
 	return &c, nil
 }
 
+// DeleteCredential removes the credential for the subject.
+func (s *Store) DeleteCredential(ctx context.Context, subject string) error {
+	return s.rdb.Del(ctx, credPrefix+subject).Err()
+}
+
+// DeleteBackupCodes removes backup codes for the subject.
+func (s *Store) DeleteBackupCodes(ctx context.Context, subject string) error {
+	return s.rdb.Del(ctx, backupPrefix+subject).Err()
+}
+
 // SaveEnrollment saves a temporary enrollment; TTL is applied.
 func (s *Store) SaveEnrollment(ctx context.Context, e *Enrollment) error {
 	data, err := json.Marshal(e)

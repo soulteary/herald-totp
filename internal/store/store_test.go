@@ -79,6 +79,23 @@ func TestSaveGetEnrollment(t *testing.T) {
 	}
 }
 
+func TestGetEnrollment_InvalidJSON(t *testing.T) {
+	st, mr := newTestStore(t)
+	defer mr.Close()
+	ctx := context.Background()
+	key := enrollPrefix + "badjson"
+	if err := st.rdb.Set(ctx, key, "not-json", 10*time.Minute).Err(); err != nil {
+		t.Fatalf("set raw: %v", err)
+	}
+	got, err := st.GetEnrollment(ctx, "badjson")
+	if err == nil {
+		t.Errorf("GetEnrollment(invalid JSON) err = nil, got = %v", got)
+	}
+	if got != nil {
+		t.Errorf("GetEnrollment(invalid JSON) should return nil")
+	}
+}
+
 func TestMarkChallengeUsed_IsChallengeUsed(t *testing.T) {
 	st, mr := newTestStore(t)
 	defer mr.Close()
@@ -167,5 +184,73 @@ func TestSaveGetBackupCodes_ConsumeBackupCode(t *testing.T) {
 	consumed, _ = st.ConsumeBackupCode(ctx, "nobody", "hash1")
 	if consumed {
 		t.Error("ConsumeBackupCode(nobody) = true, want false")
+	}
+}
+
+func TestDeleteCredential_DeleteBackupCodes(t *testing.T) {
+	st, mr := newTestStore(t)
+	defer mr.Close()
+	ctx := context.Background()
+
+	cred := &Credential{
+		Subject: "del1", SecretEnc: "enc", Issuer: "Herald", Label: "del1",
+		Period: 30, Digits: 6, Algo: "SHA1", Enabled: true,
+		LastUsedStep: 0, CreatedAt: 1, UpdatedAt: 1,
+	}
+	if err := st.SaveCredential(ctx, cred); err != nil {
+		t.Fatalf("SaveCredential: %v", err)
+	}
+	if err := st.DeleteCredential(ctx, "del1"); err != nil {
+		t.Fatalf("DeleteCredential: %v", err)
+	}
+	got, _ := st.GetCredential(ctx, "del1")
+	if got != nil {
+		t.Errorf("GetCredential after Delete = %v, want nil", got)
+	}
+
+	entries := []BackupCodeEntry{{CodeHash: "h1", UsedAt: 0}}
+	if err := st.SaveBackupCodes(ctx, "del2", entries); err != nil {
+		t.Fatalf("SaveBackupCodes: %v", err)
+	}
+	if err := st.DeleteBackupCodes(ctx, "del2"); err != nil {
+		t.Fatalf("DeleteBackupCodes: %v", err)
+	}
+	gotEntries, _ := st.GetBackupCodes(ctx, "del2")
+	if gotEntries != nil {
+		t.Errorf("GetBackupCodes after Delete = %v, want nil", gotEntries)
+	}
+}
+
+func TestGetCredential_InvalidJSON(t *testing.T) {
+	st, mr := newTestStore(t)
+	defer mr.Close()
+	ctx := context.Background()
+	key := credPrefix + "badjson"
+	if err := st.rdb.Set(ctx, key, "not-json", 0).Err(); err != nil {
+		t.Fatalf("set raw: %v", err)
+	}
+	got, err := st.GetCredential(ctx, "badjson")
+	if err == nil {
+		t.Errorf("GetCredential(invalid JSON) err = nil, got = %v", got)
+	}
+	if got != nil {
+		t.Errorf("GetCredential(invalid JSON) should return nil credential")
+	}
+}
+
+func TestGetBackupCodes_InvalidJSON(t *testing.T) {
+	st, mr := newTestStore(t)
+	defer mr.Close()
+	ctx := context.Background()
+	key := backupPrefix + "badjson"
+	if err := st.rdb.Set(ctx, key, "not-json", 0).Err(); err != nil {
+		t.Fatalf("set raw: %v", err)
+	}
+	got, err := st.GetBackupCodes(ctx, "badjson")
+	if err == nil {
+		t.Errorf("GetBackupCodes(invalid JSON) err = nil, got = %v", got)
+	}
+	if got != nil {
+		t.Errorf("GetBackupCodes(invalid JSON) should return nil")
 	}
 }

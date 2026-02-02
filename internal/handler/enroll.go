@@ -45,14 +45,10 @@ func EnrollStart(st *store.Store, log *logger.Logger) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		var req EnrollStartRequest
 		if err := c.BodyParser(&req); err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"ok": false, "reason": "invalid_request", "message": err.Error(),
-			})
+			return respondBadRequest(c, "invalid_request", err.Error())
 		}
 		if req.Subject == "" {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"ok": false, "reason": "invalid_request", "message": "subject is required",
-			})
+			return respondBadRequest(c, "invalid_request", "subject is required")
 		}
 		if req.Label == "" {
 			req.Label = req.Subject
@@ -61,53 +57,34 @@ func EnrollStart(st *store.Store, log *logger.Logger) fiber.Handler {
 		keyBytes, err := secret.KeyBytes(config.EncryptionKey)
 		if err != nil || len(config.EncryptionKey) < 32 {
 			log.Warn().Msg("HERALD_TOTP_ENCRYPTION_KEY not set or invalid (need 32 bytes)")
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"ok": false, "reason": "config_error", "message": "encryption not configured",
-			})
+			return respondConfigError(c, "encryption not configured")
 		}
 
-		// Rate limit by subject
 		subjectCount, _ := st.IncrRateSubject(c.Context(), req.Subject)
 		if subjectCount > int64(config.RateLimitPerSubject) {
-			return c.Status(fiber.StatusTooManyRequests).JSON(fiber.Map{
-				"ok": false, "reason": "rate_limited",
-			})
+			return respondRateLimited(c)
 		}
 		ipCount, _ := st.IncrRateIP(c.Context(), c.IP())
 		if ipCount > int64(config.RateLimitPerIP) {
-			return c.Status(fiber.StatusTooManyRequests).JSON(fiber.Map{
-				"ok": false, "reason": "rate_limited",
-			})
+			return respondRateLimited(c)
 		}
 
-		cfg := totp.Config{
-			Issuer: config.TOTPIssuer,
-			Period: uint(config.TOTPPeriod),
-			Digits: totp.DigitsFromInt(config.TOTPDigits),
-			Algo:   totp.AlgorithmSHA1,
-			Skew:   uint(config.TOTPSkew),
-		}
+		cfg := totpConfigFromConfig()
 		secretBase32, otpauthURI, err := totp.Generate(req.Label, cfg)
 		if err != nil {
 			log.Warn().Err(err).Str("subject", secure.MaskString(req.Subject, 4)).Msg("enroll start: generate failed")
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"ok": false, "reason": "internal_error",
-			})
+			return respondInternalError(c)
 		}
 
 		enrollID, err := NewEnrollID()
 		if err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"ok": false, "reason": "internal_error",
-			})
+			return respondInternalError(c)
 		}
 
 		secretEnc, err := secret.Encrypt(keyBytes, secretBase32)
 		if err != nil {
 			log.Warn().Err(err).Msg("enroll start: encrypt failed")
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"ok": false, "reason": "internal_error",
-			})
+			return respondInternalError(c)
 		}
 
 		now := time.Now()
@@ -125,16 +102,14 @@ func EnrollStart(st *store.Store, log *logger.Logger) fiber.Handler {
 		}
 		if err := st.SaveEnrollment(c.Context(), e); err != nil {
 			log.Warn().Err(err).Msg("enroll start: save failed")
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"ok": false, "reason": "internal_error",
-			})
+			return respondInternalError(c)
 		}
 
-		return c.JSON(EnrollStartResponse{
-			EnrollID:     enrollID,
-			SecretBase32: secretBase32,
-			OtpauthURI:   otpauthURI,
-		})
+		resp := EnrollStartResponse{EnrollID: enrollID, OtpauthURI: otpauthURI}
+		if config.ExposeSecretInEnroll {
+			resp.SecretBase32 = secretBase32
+		}
+		return c.JSON(resp)
 	}
 }
 
@@ -143,55 +118,37 @@ func EnrollConfirm(st *store.Store, log *logger.Logger) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		var req EnrollConfirmRequest
 		if err := c.BodyParser(&req); err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"ok": false, "reason": "invalid_request", "message": err.Error(),
-			})
+			return respondBadRequest(c, "invalid_request", err.Error())
 		}
 		if req.EnrollID == "" || req.Code == "" {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"ok": false, "reason": "invalid_request", "message": "enroll_id and code are required",
-			})
+			return respondBadRequest(c, "invalid_request", "enroll_id and code are required")
 		}
 
 		keyBytes, err := secret.KeyBytes(config.EncryptionKey)
 		if err != nil || len(config.EncryptionKey) < 32 {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"ok": false, "reason": "config_error",
-			})
+			return respondConfigError(c, "")
 		}
 
 		e, err := st.GetEnrollment(c.Context(), req.EnrollID)
 		if err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"ok": false, "reason": "internal_error",
-			})
+			return respondInternalError(c)
 		}
 		if e == nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"ok": false, "reason": "expired", "message": "enrollment not found or expired",
-			})
+			return respondBadRequest(c, "expired", "enrollment not found or expired")
 		}
 
 		secretPlain, err := secret.Decrypt(keyBytes, e.SecretEnc)
 		if err != nil {
 			log.Warn().Err(err).Msg("enroll confirm: decrypt failed")
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"ok": false, "reason": "internal_error",
-			})
+			return respondInternalError(c)
 		}
 
-		cfg := totp.Config{
-			Issuer: config.TOTPIssuer,
-			Period: uint(e.Period),
-			Digits: totp.DigitsFromInt(e.Digits),
-			Algo:   totp.AlgorithmSHA1,
-			Skew:   uint(config.TOTPSkew),
-		}
+		cfg := totpConfigFromConfig()
+		cfg.Period = uint(e.Period)
+		cfg.Digits = totp.DigitsFromInt(e.Digits)
 		valid, err := totp.Validate(req.Code, secretPlain, cfg, time.Now())
 		if err != nil || !valid {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"ok": false, "reason": "invalid", "message": "code verification failed",
-			})
+			return respondBadRequest(c, "invalid", "code verification failed")
 		}
 
 		now := time.Now()
@@ -210,9 +167,7 @@ func EnrollConfirm(st *store.Store, log *logger.Logger) fiber.Handler {
 		}
 		if err := st.SaveCredential(c.Context(), cred); err != nil {
 			log.Warn().Err(err).Msg("enroll confirm: save credential failed")
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"ok": false, "reason": "internal_error",
-			})
+			return respondInternalError(c)
 		}
 		_ = st.DeleteEnrollment(c.Context(), req.EnrollID)
 

@@ -20,9 +20,12 @@ type VerifyRequest struct {
 	ChallengeID string `json:"challenge_id"` // optional, for replay/audit
 }
 
-// VerifyResponse is the response for POST /v1/verify.
+// VerifyResponse is the response for POST /v1/verify (success).
 type VerifyResponse struct {
-	OK bool `json:"ok"`
+	OK       bool     `json:"ok"`
+	Subject  string   `json:"subject,omitempty"`
+	AMR      []string `json:"amr,omitempty"`
+	IssuedAt int64    `json:"issued_at,omitempty"`
 }
 
 // VerifyErrorResponse is the error response for verify.
@@ -101,13 +104,7 @@ func Verify(st *store.Store, log *logger.Logger) fiber.Handler {
 			})
 		}
 
-		cfg := totp.Config{
-			Issuer: config.TOTPIssuer,
-			Period: uint(cred.Period),
-			Digits: totp.DigitsFromInt(cred.Digits),
-			Algo:   totp.AlgorithmSHA1,
-			Skew:   uint(config.TOTPSkew),
-		}
+		cfg := totpConfigFromCred(cred)
 		now := time.Now()
 		valid, err := totp.Validate(req.Code, secretPlain, cfg, now)
 		if !valid || err != nil {
@@ -118,7 +115,8 @@ func Verify(st *store.Store, log *logger.Logger) fiber.Handler {
 				if req.ChallengeID != "" {
 					_ = st.MarkChallengeUsed(c.Context(), req.ChallengeID)
 				}
-				return c.JSON(VerifyResponse{OK: true})
+				issuedAt := time.Now().Unix()
+				return c.JSON(VerifyResponse{OK: true, Subject: req.Subject, AMR: []string{"totp", "backup_code"}, IssuedAt: issuedAt})
 			}
 			return c.Status(fiber.StatusUnauthorized).JSON(VerifyErrorResponse{
 				OK: false, Reason: "invalid",
@@ -143,6 +141,6 @@ func Verify(st *store.Store, log *logger.Logger) fiber.Handler {
 		if req.ChallengeID != "" {
 			_ = st.MarkChallengeUsed(c.Context(), req.ChallengeID)
 		}
-		return c.JSON(VerifyResponse{OK: true})
+		return c.JSON(VerifyResponse{OK: true, Subject: req.Subject, AMR: []string{"totp"}, IssuedAt: now.Unix()})
 	}
 }
