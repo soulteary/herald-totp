@@ -2,7 +2,6 @@ package config
 
 import (
 	"encoding/json"
-	"sync"
 	"time"
 
 	"github.com/soulteary/cli-kit/env"
@@ -12,7 +11,7 @@ import (
 var log *logger.Logger
 
 var (
-	Port   = env.Get("PORT", ":8084")
+	Port     = env.Get("PORT", ":8084")
 	LogLevel = env.Get("LOG_LEVEL", "info")
 
 	// Redis
@@ -33,18 +32,17 @@ var (
 	EncryptionKey = env.Get("HERALD_TOTP_ENCRYPTION_KEY", "")
 
 	// Service auth: API Key or HMAC
-	APIKey     = env.Get("API_KEY", "")
-	HMACSecret = env.Get("HMAC_SECRET", "")
+	APIKey       = env.Get("API_KEY", "")
+	HMACSecret   = env.Get("HMAC_SECRET", "")
 	HMACKeysJSON = env.Get("HERALD_TOTP_HMAC_KEYS", "")
 	ServiceName  = env.Get("SERVICE_NAME", "herald-totp")
 
 	hmacKeysMap      map[string]string
-	hmacKeysMapOnce  sync.Once
 	hmacDefaultKeyID string
 
 	// Rate limit
 	RateLimitPerSubject = env.GetInt("RATE_LIMIT_PER_SUBJECT", 20) // per hour
-	RateLimitPerIP      = env.GetInt("RATE_LIMIT_PER_IP", 30)       // per minute
+	RateLimitPerIP      = env.GetInt("RATE_LIMIT_PER_IP", 30)      // per minute
 )
 
 // Initialize sets the logger and parses HMAC keys if present.

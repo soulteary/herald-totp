@@ -1,0 +1,280 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master, develop ]
+
+env:
+  GO_VERSION: '1.25'
+  DOCKER_BUILDKIT: 1
+
+jobs:
+  # Code formatting check
+  fmt:
+    name: Code Formatting Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go environment
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Check code formatting
+        run: |
+          if [ "$(gofmt -s -l . | wc -l)" -gt 0 ]; then
+            echo "The following files have incorrect formatting:"
+            gofmt -s -d .
+            exit 1
+          fi
+
+  # Code static analysis
+  vet:
+    name: Code Static Analysis
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go environment
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run go vet
+        run: go vet ./...
+
+  # Code testing
+  test:
+    name: Code Testing
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        go-version: ['1.25']
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go environment
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go-version }}
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run tests
+        run: go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
+
+      - name: Generate coverage report
+        run: go tool cover -html=coverage.out -o coverage.html
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.html
+
+      - name: Display coverage summary
+        run: go tool cover -func=coverage.out
+
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          file: ./coverage.out
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: false
+
+  # Code quality check (using golangci-lint)
+  lint:
+    name: Code Quality Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go environment (temporarily use 1.24 to match golangci-lint)
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: Temporarily modify go.mod to match golangci-lint's Go version
+        run: |
+          cp go.mod go.mod.backup
+          sed -i 's/^go 1\.25[^ ]*$/go 1.24/' go.mod
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v7
+        with:
+          version: latest
+          args: --timeout=5m
+          only-new-issues: false
+
+      - name: Restore go.mod
+        if: always()
+        run: |
+          mv go.mod.backup go.mod
+
+  # Dependency security scan
+  security-scan:
+    name: Dependency Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go environment
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@latest
+
+      - name: Run security scan
+        run: govulncheck ./...
+
+  # Docker build
+  docker-build:
+    name: Docker Build
+    runs-on: ubuntu-latest
+    needs: [test]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Get version information
+        id: version
+        run: |
+          VERSION=$(git describe --tags --abbrev=0 2>/dev/null || echo "dev-$(git rev-parse --short HEAD)")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Latest version: $VERSION"
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: false
+          load: true
+          tags: herald-totp:test
+          build-args: |
+            VERSION=${{ steps.version.outputs.version }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Verify image
+        run: |
+          docker images herald-totp:test
+          docker inspect herald-totp:test
+
+  # Full build check
+  build:
+    name: Build Check
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        go-version: ['1.25']
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go environment
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go-version }}
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Get version information
+        id: version
+        run: |
+          VERSION=$(git describe --tags --abbrev=0 2>/dev/null || echo "dev-$(git rev-parse --short HEAD)")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Build project
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          COMMIT=${{ github.sha }}
+          BUILD_DATE=$(date +%FT%T%z)
+          LDFLAGS="-s -w -X 'github.com/soulteary/version-kit.Version=${VERSION}' -X 'github.com/soulteary/version-kit.Commit=${COMMIT}' -X 'github.com/soulteary/version-kit.BuildDate=${BUILD_DATE}'"
+          CGO_ENABLED=0 go build -ldflags "${LDFLAGS}" -o herald-totp${{ matrix.os == 'windows-latest' && '.exe' || '' }} ./main.go
+
+      - name: Verify build artifacts
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          if [ -f herald-totp ]; then
+            echo "Build successful, file exists"
+            ls -lh herald-totp
+            file herald-totp
+          else
+            echo "Build failed, file does not exist"
+            exit 1
+          fi
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: herald-totp-binary-${{ matrix.os }}
+          path: herald-totp${{ matrix.os == 'windows-latest' && '.exe' || '' }}
+          retention-days: 7

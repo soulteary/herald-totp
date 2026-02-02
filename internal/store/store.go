@@ -9,27 +9,27 @@ import (
 )
 
 const (
-	credPrefix     = "totp:cred:"
-	enrollPrefix   = "totp:enroll:"
-	backupPrefix   = "totp:backup:"
-	chUsedPrefix   = "totp:ch_used:"
+	credPrefix        = "totp:cred:"
+	enrollPrefix      = "totp:enroll:"
+	backupPrefix      = "totp:backup:"
+	chUsedPrefix      = "totp:ch_used:"
 	rateSubjectPrefix = "totp:rate:subject:"
-	rateIPPrefix   = "totp:rate:ip:"
+	rateIPPrefix      = "totp:rate:ip:"
 )
 
 // Credential is the persisted TOTP credential for a subject.
 type Credential struct {
-	Subject       string `json:"subject"`
-	SecretEnc     string `json:"secret_enc"`
-	Issuer        string `json:"issuer"`
-	Label         string `json:"label"`
-	Period        uint   `json:"period"`
-	Digits        int    `json:"digits"`
-	Algo          string `json:"algo"`
-	Enabled       bool   `json:"enabled"`
-	LastUsedStep  int64  `json:"last_used_step"`
-	CreatedAt     int64  `json:"created_at"`
-	UpdatedAt     int64  `json:"updated_at"`
+	Subject      string `json:"subject"`
+	SecretEnc    string `json:"secret_enc"`
+	Issuer       string `json:"issuer"`
+	Label        string `json:"label"`
+	Period       uint   `json:"period"`
+	Digits       int    `json:"digits"`
+	Algo         string `json:"algo"`
+	Enabled      bool   `json:"enabled"`
+	LastUsedStep int64  `json:"last_used_step"`
+	CreatedAt    int64  `json:"created_at"`
+	UpdatedAt    int64  `json:"updated_at"`
 }
 
 // Enrollment is the temporary enrollment state.

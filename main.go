@@ -20,9 +20,9 @@ import (
 func showBanner() {
 	pterm.DefaultBox.Println(
 		putils.CenterText(
-			"Herald TOTP\n"+
-				"TOTP 2FA Service (Enroll / Verify / Backup Codes)\n"+
-				"Version: "+version.Version,
+			"Herald TOTP\n" +
+				"TOTP 2FA Service (Enroll / Verify / Backup Codes)\n" +
+				"Version: " + version.Version,
 		),
 	)
 	time.Sleep(time.Millisecond)

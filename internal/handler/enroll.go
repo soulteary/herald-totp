@@ -35,9 +35,9 @@ type EnrollConfirmRequest struct {
 
 // EnrollConfirmResponse is the response for POST /v1/enroll/confirm.
 type EnrollConfirmResponse struct {
-	Subject      string   `json:"subject"`
-	TotpEnabled  bool     `json:"totp_enabled"`
-	BackupCodes  []string `json:"backup_codes,omitempty"`
+	Subject     string   `json:"subject"`
+	TotpEnabled bool     `json:"totp_enabled"`
+	BackupCodes []string `json:"backup_codes,omitempty"`
 }
 
 // EnrollStart handles POST /v1/enroll/start.
