@@ -8,11 +8,13 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/recover"
 	health "github.com/soulteary/health-kit"
 	logger "github.com/soulteary/logger-kit"
+	metricskit "github.com/soulteary/metrics-kit"
 	middlewarekit "github.com/soulteary/middleware-kit"
 	rediskit "github.com/soulteary/redis-kit/client"
 
 	"github.com/soulteary/herald-totp/internal/config"
 	"github.com/soulteary/herald-totp/internal/handler"
+	"github.com/soulteary/herald-totp/internal/metrics"
 	"github.com/soulteary/herald-totp/internal/store"
 )
 
@@ -50,6 +52,8 @@ func Setup(app *fiber.App, log *logger.Logger) (*store.Store, error) {
 	healthAgg := health.NewAggregator(healthConfig)
 	healthAgg.AddChecker(health.NewRedisChecker(redisClient))
 	app.Get("/healthz", health.FiberHandler(healthAgg))
+
+	app.Get("/metrics", metricskit.FiberHandlerFor(metrics.Registry))
 
 	v1 := app.Group("/v1")
 	zerologLogger := log.Zerolog()

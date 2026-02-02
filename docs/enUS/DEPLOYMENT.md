@@ -46,6 +46,16 @@ Or use the [.env.example](../.env.example) and run with your process manager / D
 
 - **GET /healthz**: includes Redis check. Use for readiness/liveness.
 
+## Monitoring
+
+- **GET /metrics**: Prometheus metrics (OpenMetrics format).
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| herald_totp_verify_total | Counter | result, reason | TOTP verify attempts (result: success/failure, reason: totp, invalid, replay, rate_limited, backup_code). |
+| herald_totp_enroll_start_total | Counter | - | Enroll/start calls. |
+| herald_totp_enroll_confirm_total | Counter | result | Enroll/confirm by result (success/failure). |
+
 ## Security
 
 - Keep `HERALD_TOTP_ENCRYPTION_KEY` secret and at least 32 bytes.

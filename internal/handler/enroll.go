@@ -9,6 +9,7 @@ import (
 	secure "github.com/soulteary/secure-kit"
 
 	"github.com/soulteary/herald-totp/internal/config"
+	"github.com/soulteary/herald-totp/internal/metrics"
 	"github.com/soulteary/herald-totp/internal/secret"
 	"github.com/soulteary/herald-totp/internal/store"
 	"github.com/soulteary/herald-totp/internal/totp"
@@ -105,6 +106,8 @@ func EnrollStart(st *store.Store, log *logger.Logger) fiber.Handler {
 			return respondInternalError(c)
 		}
 
+		metrics.RecordEnrollStart()
+
 		resp := EnrollStartResponse{EnrollID: enrollID, OtpauthURI: otpauthURI}
 		if config.ExposeSecretInEnroll {
 			resp.SecretBase32 = secretBase32
@@ -134,6 +137,7 @@ func EnrollConfirm(st *store.Store, log *logger.Logger) fiber.Handler {
 			return respondInternalError(c)
 		}
 		if e == nil {
+			metrics.RecordEnrollConfirm("failure")
 			return respondBadRequest(c, "expired", "enrollment not found or expired")
 		}
 
@@ -148,9 +152,11 @@ func EnrollConfirm(st *store.Store, log *logger.Logger) fiber.Handler {
 		cfg.Digits = totp.DigitsFromInt(e.Digits)
 		valid, err := totp.Validate(req.Code, secretPlain, cfg, time.Now())
 		if err != nil || !valid {
+			metrics.RecordEnrollConfirm("failure")
 			return respondBadRequest(c, "invalid", "code verification failed")
 		}
 
+		metrics.RecordEnrollConfirm("success")
 		now := time.Now()
 		cred := &store.Credential{
 			Subject:      e.Subject,
