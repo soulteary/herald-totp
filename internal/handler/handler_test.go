@@ -11,9 +11,9 @@ import (
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/gofiber/fiber/v2"
-	logger "github.com/soulteary/logger-kit"
 	pqtotp "github.com/pquerna/otp/totp"
 	"github.com/redis/go-redis/v9"
+	logger "github.com/soulteary/logger-kit"
 
 	"github.com/soulteary/herald-totp/internal/config"
 	"github.com/soulteary/herald-totp/internal/secret"
