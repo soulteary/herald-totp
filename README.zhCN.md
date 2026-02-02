@@ -19,6 +19,41 @@ herald-totp 是 Herald/Stargate 栈的 TOTP 双因素认证服务：**绑定（e
 - **恢复码**：确认绑定后返回 10 个一次性码，设备丢失时可用来验证。
 - **安全**：加密存储密钥（AES-GCM）、限流、时间步防重放、API Key 或 HMAC 鉴权。
 
+## 架构
+
+Stargate 负责登录与 TOTP 绑定编排；herald-totp 在 Redis 中存储每用户 TOTP 密钥（加密）与恢复码，并执行 enroll/verify。
+
+```mermaid
+sequenceDiagram
+  participant User as 用户
+  participant Stargate
+  participant HeraldTotp as herald-totp
+  participant Redis
+
+  Note over User,Redis: 绑定流程（登录后）
+  User->>Stargate: 打开 TOTP 绑定页
+  Stargate->>HeraldTotp: POST /v1/enroll/start (subject)
+  HeraldTotp->>Redis: 存临时绑定状态
+  HeraldTotp-->>Stargate: enroll_id, otpauth_uri
+  Stargate-->>User: 展示二维码
+  User->>Stargate: 输入 TOTP 码
+  Stargate->>HeraldTotp: POST /v1/enroll/confirm (enroll_id, code)
+  HeraldTotp->>Redis: 保存凭证、backup_codes
+  HeraldTotp-->>Stargate: backup_codes
+  Stargate-->>User: 绑定完成
+
+  Note over User,Redis: 登录流程（TOTP 步骤）
+  User->>Stargate: 提交 TOTP 或恢复码
+  Stargate->>HeraldTotp: POST /v1/verify (subject, code)
+  HeraldTotp->>Redis: 读取凭证并校验
+  HeraldTotp-->>Stargate: ok, subject, amr, issued_at
+  Stargate-->>User: 创建会话
+```
+
+- **Stargate**：ForwardAuth / 登录与 TOTP 绑定编排；调用 herald-totp 完成 enroll 与 verify。
+- **herald-totp**：每用户 TOTP 密钥（AES-GCM 存 Redis）、enroll/confirm、verify（TOTP 或恢复码）、revoke、status。
+- **Redis**：凭证、绑定临时状态、恢复码、限流状态。
+
 ## 快速开始
 
 1. 设置 32 字节加密密钥：`export HERALD_TOTP_ENCRYPTION_KEY="your-32-byte-key!!"`

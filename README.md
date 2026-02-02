@@ -20,6 +20,41 @@ TOTP 2FA service for the Herald/Stargate stack: **enroll** (bind), **verify**, a
 - **Security**: Encrypted secret storage (AES-GCM), rate limiting, time-step replay protection, API key or HMAC auth.
 - **Graceful shutdown**: On `SIGINT` or `SIGTERM`, server stops accepting new requests and shuts down with a 10s timeout.
 
+## Architecture
+
+Stargate orchestrates login and TOTP bind; herald-totp stores per-user TOTP secrets (encrypted) and backup codes in Redis and performs enroll/verify.
+
+```mermaid
+sequenceDiagram
+  participant User
+  participant Stargate
+  participant HeraldTotp as herald-totp
+  participant Redis
+
+  Note over User,Redis: Bind flow (after login)
+  User->>Stargate: Open TOTP enroll page
+  Stargate->>HeraldTotp: POST /v1/enroll/start (subject)
+  HeraldTotp->>Redis: Store temp enrollment
+  HeraldTotp-->>Stargate: enroll_id, otpauth_uri
+  Stargate-->>User: Show QR code
+  User->>Stargate: Enter TOTP code
+  Stargate->>HeraldTotp: POST /v1/enroll/confirm (enroll_id, code)
+  HeraldTotp->>Redis: Save credential, backup_codes
+  HeraldTotp-->>Stargate: backup_codes
+  Stargate-->>User: Bind done
+
+  Note over User,Redis: Login flow (TOTP step)
+  User->>Stargate: Submit TOTP or backup code
+  Stargate->>HeraldTotp: POST /v1/verify (subject, code)
+  HeraldTotp->>Redis: Read credential, verify
+  HeraldTotp-->>Stargate: ok, subject, amr, issued_at
+  Stargate-->>User: Session created
+```
+
+- **Stargate**: ForwardAuth / login and TOTP bind orchestration; calls herald-totp for enroll and verify.
+- **herald-totp**: Per-user TOTP secrets (AES-GCM in Redis), enroll/confirm, verify (TOTP or backup code), revoke, status.
+- **Redis**: Credentials, enrollment temp state, backup codes, rate limits.
+
 ## Protocol
 
 - **POST /v1/enroll/start** – Start enrollment; returns `enroll_id`, `otpauth_uri` (and optionally `secret_base32`).
