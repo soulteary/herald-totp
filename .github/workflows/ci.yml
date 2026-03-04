@@ -2,12 +2,12 @@ name: CI
 
 on:
   push:
-    branches: [ main, master, develop ]
+    branches: [ main, develop ]
   pull_request:
-    branches: [ main, master, develop ]
+    branches: [ main, develop ]
 
 env:
-  GO_VERSION: '1.25'
+  GO_VERSION: '1.26.0'
   DOCKER_BUILDKIT: 1
 
 jobs:
@@ -67,7 +67,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go-version: ['1.25']
+        go-version: ['1.26.0']
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -119,33 +119,21 @@ jobs:
     name: Code Quality Check
     runs-on: ubuntu-latest
     steps:
+
       - name: Checkout code
         uses: actions/checkout@v6
 
-      - name: Set up Go environment (temporarily use 1.24 to match golangci-lint)
+      - name: Set up Go environment
         uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
 
-      - name: Temporarily modify go.mod to match golangci-lint's Go version
-        run: |
-          cp go.mod go.mod.backup
-          sed -i 's/^go 1\.25[^ ]*$/go 1.24/' go.mod
-
-      - name: Download dependencies
-        run: go mod download
-
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:
-          version: latest
+          version: v2.7.2
           args: --timeout=5m
           only-new-issues: false
-
-      - name: Restore go.mod
-        if: always()
-        run: |
-          mv go.mod.backup go.mod
 
   # Dependency security scan
   security-scan:
@@ -222,7 +210,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go-version: ['1.25']
+        go-version: ['1.26.0']
         os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
       - name: Checkout code
