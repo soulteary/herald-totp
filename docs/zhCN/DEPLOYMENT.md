@@ -36,20 +36,26 @@ go run .
 
 或参考 [.env.example](../.env.example)，配合进程管理 / Docker 使用。
 
-## 与 Stargate 集成
+## 与 Stargate、Herald 集成
 
-1. Stargate 环境：`HERALD_TOTP_ENABLED=true`、`HERALD_TOTP_BASE_URL=http://herald-totp:8084`，以及 `HERALD_TOTP_API_KEY` 或 `HERALD_TOTP_HMAC_SECRET`。
-2. 登录：用户选择 OTP 时，Stargate 调用 herald-totp `POST /v1/verify`（subject + code）。
-3. 绑定：用户登录后访问 Stargate `/totp/enroll`；Stargate 调用 herald-totp enroll/start 与 enroll/confirm。
+1. **Stargate**：仅设置 `HERALD_TOTP_ENABLED=true`（TOTP 经 Herald 代理）。
+2. **Herald**：设置 `HERALD_TOTP_ENABLED=true`、`HERALD_TOTP_BASE_URL=http://herald-totp:8084`，以及 `HERALD_TOTP_API_KEY` 或 `HERALD_TOTP_HMAC_SECRET`。Herald 将 `/v1/totp/*` 代理到 herald-totp。
+3. **登录流程**：用户输入 TOTP 码；Stargate 调用 Herald `/v1/totp/verify`；Herald 转发到 herald-totp。
+4. **绑定流程**：用户登录后打开 Stargate `/totp/enroll`；Stargate 调用 Herald 的 enroll/start 与 enroll/confirm；Herald 转发到 herald-totp。
 
 ## 健康检查
 
 - **GET /healthz**：包含 Redis 检查，可用于就绪/存活探针。
 
-## 监控建议
+## 监控
 
-- 可对 `/v1/verify`、`/v1/enroll/start`、`/v1/enroll/confirm` 的请求次数与状态码做指标（如 Prometheus）。
-- 建议指标：`herald_totp_verifications_total{result="ok|invalid|replay"}`、`herald_totp_enrolls_total{step="start|confirm"}`、`herald_totp_rate_limit_hits_total`。
+- **GET /metrics**：Prometheus 指标（OpenMetrics 格式）。
+
+| 指标 | 类型 | 标签 | 说明 |
+|------|------|------|------|
+| herald_totp_verify_total | Counter | result, reason | TOTP 验证次数（result: success/failure，reason: totp, invalid, replay, rate_limited, backup_code）。 |
+| herald_totp_enroll_start_total | Counter | - | enroll/start 调用次数。 |
+| herald_totp_enroll_confirm_total | Counter | result | enroll/confirm 按结果统计（success/failure）。 |
 
 ## 安全
 

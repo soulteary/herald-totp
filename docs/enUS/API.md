@@ -10,7 +10,7 @@ http://localhost:8084
 
 ## Authentication
 
-When `API_KEY` or `HMAC_SECRET` / `HERALD_TOTP_HMAC_KEYS` is set, callers (e.g. Stargate) must authenticate:
+When `API_KEY` or `HMAC_SECRET` / `HERALD_TOTP_HMAC_KEYS` is set, callers (e.g. Herald, which proxies for Stargate) must authenticate:
 
 - **API Key**: send `X-API-Key` header with the same value.
 - **HMAC**: send `X-Timestamp`, `X-Service`, `X-Signature` (and optionally `X-Key-Id`). Signature: `HMAC-SHA256(secret, timestamp + ":" + service + ":" + body)`.

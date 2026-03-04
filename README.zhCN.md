@@ -18,6 +18,7 @@ herald-totp 是 Herald/Stargate 栈的 TOTP 双因素认证服务：**绑定（e
 - **状态**：`GET /v1/status?subject=...` 查询用户是否已开启 TOTP。
 - **恢复码**：确认绑定后返回 10 个一次性码，设备丢失时可用来验证。
 - **安全**：加密存储密钥（AES-GCM）、限流、时间步防重放、API Key 或 HMAC 鉴权。
+- **优雅关闭**：收到 `SIGINT` 或 `SIGTERM` 后停止接收新请求，在 10 秒超时内完成关闭。
 
 ## 架构
 
@@ -54,14 +55,6 @@ sequenceDiagram
 - **herald-totp**：每用户 TOTP 密钥（AES-GCM 存 Redis）、enroll/confirm、verify（TOTP 或恢复码）、revoke、status。
 - **Redis**：凭证、绑定临时状态、恢复码、限流状态。
 
-## 快速开始
-
-1. 设置 32 字节加密密钥：`export HERALD_TOTP_ENCRYPTION_KEY="your-32-byte-key!!"`
-2. 启动 Redis 与 herald-totp：`go run .`
-3. 在 Stargate 配置 `HERALD_TOTP_ENABLED=true`、`HERALD_TOTP_BASE_URL=http://localhost:8084`。
-
-详见 [docs/zhCN/API.md](docs/zhCN/API.md) 与 [docs/zhCN/DEPLOYMENT.md](docs/zhCN/DEPLOYMENT.md)。
-
 ## 协议
 
 - **POST /v1/enroll/start**：开始绑定，返回 `enroll_id`、`otpauth_uri`（可选 `secret_base32`）。
@@ -87,20 +80,20 @@ sequenceDiagram
 
 ## Stargate 侧配置
 
-- `HERALD_TOTP_ENABLED=true`
-- `HERALD_TOTP_BASE_URL=http://herald-totp:8084`
-- `HERALD_TOTP_API_KEY` 或 `HERALD_TOTP_HMAC_SECRET`（与 herald-totp 一致）
+- 设置 `HERALD_TOTP_ENABLED=true`、`HERALD_TOTP_BASE_URL=http://herald-totp:8084`，以及 `HERALD_TOTP_API_KEY` 或 `HERALD_TOTP_HMAC_SECRET` 与 herald-totp 保持一致。
 
-## 构建与运行
+## 快速开始
 
-### 二进制
+### 构建与运行（二进制）
 
 ```bash
 go build -o herald-totp .
 ./herald-totp
 ```
 
-### Docker
+配置好 `HERALD_TOTP_ENCRYPTION_KEY` 与 Redis 后，enroll 与 verify 即可使用。
+
+### 使用 Docker 运行
 
 ```bash
 docker build -t herald-totp .
@@ -110,7 +103,7 @@ docker run -d --name herald-totp -p 8084:8084 \
   herald-totp
 ```
 
-可选：`-e API_KEY=your_shared_secret`，Stargate 侧设置 `HERALD_TOTP_API_KEY` 为相同值。
+可选：添加 `-e API_KEY=your_shared_secret`，并在 Stargate 侧将 `HERALD_TOTP_API_KEY` 设为相同值。
 
 ## 文档
 
@@ -123,12 +116,21 @@ docker run -d --name herald-totp -p 8084:8084 \
 go test ./...
 ```
 
-覆盖率：`go test -cover ./...`，或 `go test -coverprofile=coverage.out ./...` 后 `go tool cover -html=coverage.out`。静态检查：`golangci-lint run`。
+覆盖率：
+
+```bash
+go test -cover ./...
+go test -coverprofile=coverage.out ./...
+go tool cover -func=coverage.out
+go tool cover -html=coverage.out
+```
+
+静态检查：`golangci-lint run`。
 
 ## 运维
 
-- **优雅关闭**：收到 `SIGINT` 或 `SIGTERM` 后停止接收新请求，在 10 秒超时内完成关闭。
-- **日志**：通过 [logger-kit](https://github.com/soulteary/logger-kit) 输出结构化 JSON 日志。
+- **优雅关闭**：收到 `SIGINT` 或 `SIGTERM` 后停止接收新请求，在 10 秒超时内完成关闭。会输出 "shutting down" 及关闭过程中的错误。
+- **日志**：通过 [logger-kit](https://github.com/soulteary/logger-kit) 输出结构化 JSON 日志。需要更多细节时可设置 `LOG_LEVEL=debug`。
 
 ## 许可证
 

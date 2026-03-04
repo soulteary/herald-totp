@@ -10,7 +10,7 @@ http://localhost:8084
 
 ## 鉴权
 
-当配置了 `API_KEY` 或 `HMAC_SECRET` / `HERALD_TOTP_HMAC_KEYS` 时，调用方（如 Stargate）必须鉴权：
+当配置了 `API_KEY` 或 `HMAC_SECRET` / `HERALD_TOTP_HMAC_KEYS` 时，调用方（如代理 Stargate 请求的 Herald）必须鉴权：
 
 - **API Key**：请求头 `X-API-Key` 与配置一致。
 - **HMAC**：请求头 `X-Timestamp`、`X-Service`、`X-Signature`（可选 `X-Key-Id`）。签名为 `HMAC-SHA256(secret, timestamp + ":" + service + ":" + body)`。
@@ -24,6 +24,14 @@ http://localhost:8084
 **GET /healthz**
 
 返回服务与 Redis 健康状态（通过 health-kit）。
+
+---
+
+### 指标
+
+**GET /metrics**
+
+返回 Prometheus/OpenMetrics 指标（verify_total、enroll_start_total、enroll_confirm_total）。此接口不需要鉴权。
 
 ---
 

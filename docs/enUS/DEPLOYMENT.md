@@ -36,11 +36,12 @@ go run .
 
 Or use the [.env.example](../.env.example) and run with your process manager / Docker.
 
-## Stargate integration
+## Stargate + Herald integration
 
-1. Set Stargate env: `HERALD_TOTP_ENABLED=true`, `HERALD_TOTP_BASE_URL=http://herald-totp:8084`, and `HERALD_TOTP_API_KEY` or `HERALD_TOTP_HMAC_SECRET`.
-2. Login flow: when user chooses OTP, Stargate calls herald-totp `POST /v1/verify` with subject and code.
-3. Bind flow: user opens Stargate `/totp/enroll` (after login); Stargate calls herald-totp enroll/start and enroll/confirm.
+1. **Stargate**: set `HERALD_TOTP_ENABLED=true` only (TOTP is via Herald proxy).
+2. **Herald**: set `HERALD_TOTP_ENABLED=true`, `HERALD_TOTP_BASE_URL=http://herald-totp:8084`, and `HERALD_TOTP_API_KEY` or `HERALD_TOTP_HMAC_SECRET`. Herald proxies `/v1/totp/*` to herald-totp.
+3. Login flow: user enters TOTP code; Stargate calls Herald `/v1/totp/verify`; Herald forwards to herald-totp.
+4. Bind flow: user opens Stargate `/totp/enroll` (after login); Stargate calls Herald enroll/start and enroll/confirm; Herald forwards to herald-totp.
 
 ## Health
 
