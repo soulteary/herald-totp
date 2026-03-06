@@ -9,14 +9,14 @@ require (
 	github.com/prometheus/client_golang v1.23.2
 	github.com/pterm/pterm v0.12.83
 	github.com/redis/go-redis/v9 v9.18.0
-	github.com/soulteary/cli-kit v1.5.0
-	github.com/soulteary/health-kit v1.1.0
-	github.com/soulteary/logger-kit v1.3.0
-	github.com/soulteary/metrics-kit v1.1.0
-	github.com/soulteary/middleware-kit v1.1.0
-	github.com/soulteary/redis-kit v1.1.0
-	github.com/soulteary/secure-kit v1.2.0
-	github.com/soulteary/version-kit v1.2.0
+	github.com/soulteary/cli-kit v1.6.0
+	github.com/soulteary/health-kit v1.2.0
+	github.com/soulteary/logger-kit v1.4.0
+	github.com/soulteary/metrics-kit v1.2.0
+	github.com/soulteary/middleware-kit v1.2.0
+	github.com/soulteary/redis-kit v1.2.0
+	github.com/soulteary/secure-kit v1.3.0
+	github.com/soulteary/version-kit v1.3.0
 )
 
 require (
