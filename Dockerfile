@@ -1,5 +1,5 @@
 # Build stage
-FROM golang:1.26-alpine3.22 AS Builder
+FROM golang:1.26.5-alpine3.22 AS Builder
 RUN apk add --no-cache git
 WORKDIR /app
 ENV CGO_ENABLED=0 GOOS=linux
