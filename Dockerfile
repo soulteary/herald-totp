@@ -1,5 +1,5 @@
 # Build stage
-FROM golang:1.26.5-alpine3.22 AS Builder
+FROM golang:1.26.5-alpine3.23 AS Builder
 RUN apk add --no-cache git
 WORKDIR /app
 ENV CGO_ENABLED=0 GOOS=linux
@@ -15,7 +15,7 @@ RUN BUILD_DATE=${BUILD_DATE:-$(date +%FT%T%z)} && \
     go build -ldflags "-w -s -X 'github.com/soulteary/version-kit.Version=$VERSION' -X 'github.com/soulteary/version-kit.Commit=$COMMIT' -X 'github.com/soulteary/version-kit.BuildDate=$BUILD_DATE'" -o herald-totp .
 
 # Runtime stage
-FROM alpine:3.22
+FROM alpine:3.23
 RUN apk add --no-cache ca-certificates curl
 COPY --from=builder /app/herald-totp /bin/herald-totp
 EXPOSE 8084
