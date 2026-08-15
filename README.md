@@ -2,7 +2,7 @@
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Go Version](https://img.shields.io/badge/go-1.25+-blue.svg)](https://golang.org)
-[![Go Report Card](https://goreportcard.com/badge/github.com/soulteary/herald-totp)](https://goreportcard.com/report/github.com/soulteary/herald-totp)
+[![Go Report Card](.github/goreportcard.svg)](.github/goreportcard-report.md)
 
 ## Multi-language Documentation
 
