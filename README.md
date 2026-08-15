@@ -1,7 +1,7 @@
 # herald-totp
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![Go Version](https://img.shields.io/badge/go-1.25+-blue.svg)](https://golang.org)
+[![Go Version](https://img.shields.io/badge/go-1.26+-blue.svg)](https://golang.org)
 [![Go Report Card](.github/goreportcard.svg)](.github/goreportcard-report.md)
 
 ## Multi-language Documentation
