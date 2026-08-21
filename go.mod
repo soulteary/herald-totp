@@ -4,7 +4,7 @@ go 1.26.6
 
 require (
 	github.com/alicebob/miniredis/v2 v2.36.1
-	github.com/gofiber/fiber/v2 v2.52.14
+	github.com/gofiber/fiber/v2 v2.52.15
 	github.com/pquerna/otp v1.5.0
 	github.com/prometheus/client_golang v1.24.1
 	github.com/pterm/pterm v0.12.83
@@ -15,7 +15,7 @@ require (
 	github.com/soulteary/metrics-kit v1.3.0
 	github.com/soulteary/middleware-kit v1.2.0
 	github.com/soulteary/redis-kit v1.3.0
-	github.com/soulteary/secure-kit v1.3.0
+	github.com/soulteary/secure-kit v1.4.0
 	github.com/soulteary/version-kit v1.4.0
 )
 
@@ -35,7 +35,7 @@ require (
 	github.com/lithammer/fuzzysearch v1.1.8 // indirect
 	github.com/mattn/go-colorable v0.1.15 // indirect
 	github.com/mattn/go-isatty v0.0.24 // indirect
-	github.com/mattn/go-runewidth v0.0.27 // indirect
+	github.com/mattn/go-runewidth v0.0.28 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/prometheus/client_model v0.6.2 // indirect
 	github.com/prometheus/common v0.70.1 // indirect
