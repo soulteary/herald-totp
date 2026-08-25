@@ -470,3 +470,127 @@ func TestGetBackupCodes_InvalidJSON(t *testing.T) {
 		t.Errorf("GetBackupCodes(invalid JSON) should return nil")
 	}
 }
+
+func TestSaveCredential_WithTTL(t *testing.T) {
+	st, mr := newTestStore(t)
+	defer mr.Close()
+	st.credTTL = 15 * time.Minute
+
+	credential := &Credential{Subject: "expiring", SecretEnc: "enc", Enabled: true}
+	if err := st.SaveCredential(context.Background(), credential); err != nil {
+		t.Fatalf("SaveCredential: %v", err)
+	}
+	if ttl := mr.TTL(credPrefix + credential.Subject); ttl != st.credTTL {
+		t.Fatalf("credential TTL = %v, want %v", ttl, st.credTTL)
+	}
+}
+
+func TestTransactionalMethods_InvalidJSON(t *testing.T) {
+	ctx := context.Background()
+	tests := []struct {
+		name string
+		key  string
+		call func(*Store) error
+	}{
+		{
+			name: "claim credential step",
+			key:  credPrefix + "bad-credential",
+			call: func(st *Store) error {
+				_, err := st.ClaimCredentialStep(ctx, "bad-credential", 1, 1)
+				return err
+			},
+		},
+		{
+			name: "confirm enrollment",
+			key:  enrollPrefix + "bad-enrollment",
+			call: func(st *Store) error {
+				_, err := st.ConfirmEnrollment(ctx,
+					&Enrollment{EnrollID: "bad-enrollment", Subject: "user", SecretEnc: "enc"},
+					&Credential{Subject: "user", SecretEnc: "enc"}, nil)
+				return err
+			},
+		},
+		{
+			name: "consume backup code",
+			key:  backupPrefix + "bad-backup",
+			call: func(st *Store) error {
+				_, err := st.ConsumeBackupCode(ctx, "bad-backup", "hash")
+				return err
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			st, mr := newTestStore(t)
+			defer mr.Close()
+			if err := st.rdb.Set(ctx, tt.key, "not-json", 0).Err(); err != nil {
+				t.Fatalf("seed invalid JSON: %v", err)
+			}
+			if err := tt.call(st); err == nil {
+				t.Fatal("expected JSON decoding error")
+			}
+		})
+	}
+}
+
+func TestConfirmEnrollment_MismatchedState(t *testing.T) {
+	st, mr := newTestStore(t)
+	defer mr.Close()
+	ctx := context.Background()
+	stored := &Enrollment{EnrollID: "mismatch", Subject: "user", SecretEnc: "stored"}
+	if err := st.SaveEnrollment(ctx, stored); err != nil {
+		t.Fatalf("SaveEnrollment: %v", err)
+	}
+
+	confirmed, err := st.ConfirmEnrollment(ctx,
+		&Enrollment{EnrollID: stored.EnrollID, Subject: stored.Subject, SecretEnc: "different"},
+		&Credential{Subject: stored.Subject, SecretEnc: "different"}, nil)
+	if err != nil || confirmed {
+		t.Fatalf("ConfirmEnrollment = (%v, %v), want (false, nil)", confirmed, err)
+	}
+	if got, err := st.GetEnrollment(ctx, stored.EnrollID); err != nil || got == nil {
+		t.Fatalf("mismatched enrollment was consumed: (%+v, %v)", got, err)
+	}
+}
+
+func TestStore_RedisErrors(t *testing.T) {
+	ctx := context.Background()
+	tests := []struct {
+		name string
+		call func(*Store) error
+	}{
+		{name: "save credential", call: func(st *Store) error { return st.SaveCredential(ctx, &Credential{Subject: "user"}) }},
+		{name: "get credential", call: func(st *Store) error { _, err := st.GetCredential(ctx, "user"); return err }},
+		{name: "delete credential", call: func(st *Store) error { return st.DeleteCredential(ctx, "user") }},
+		{name: "delete backup codes", call: func(st *Store) error { return st.DeleteBackupCodes(ctx, "user") }},
+		{name: "delete subject", call: func(st *Store) error { return st.DeleteSubject(ctx, "user") }},
+		{name: "save enrollment", call: func(st *Store) error { return st.SaveEnrollment(ctx, &Enrollment{EnrollID: "enroll"}) }},
+		{name: "get enrollment", call: func(st *Store) error { _, err := st.GetEnrollment(ctx, "enroll"); return err }},
+		{name: "delete enrollment", call: func(st *Store) error { return st.DeleteEnrollment(ctx, "enroll") }},
+		{name: "confirm enrollment", call: func(st *Store) error {
+			_, err := st.ConfirmEnrollment(ctx, &Enrollment{EnrollID: "enroll"}, &Credential{Subject: "user"}, nil)
+			return err
+		}},
+		{name: "mark challenge", call: func(st *Store) error { return st.MarkChallengeUsed(ctx, "challenge") }},
+		{name: "claim challenge", call: func(st *Store) error { _, err := st.ClaimChallenge(ctx, "challenge"); return err }},
+		{name: "check challenge", call: func(st *Store) error { _, err := st.IsChallengeUsed(ctx, "challenge"); return err }},
+		{name: "increment subject rate", call: func(st *Store) error { _, err := st.IncrRateSubject(ctx, "user"); return err }},
+		{name: "increment IP rate", call: func(st *Store) error { _, err := st.IncrRateIP(ctx, "127.0.0.1"); return err }},
+		{name: "save backup codes", call: func(st *Store) error { return st.SaveBackupCodes(ctx, "user", nil) }},
+		{name: "get backup codes", call: func(st *Store) error { _, err := st.GetBackupCodes(ctx, "user"); return err }},
+		{name: "consume backup code", call: func(st *Store) error { _, err := st.ConsumeBackupCode(ctx, "user", "hash"); return err }},
+		{name: "claim credential step", call: func(st *Store) error { _, err := st.ClaimCredentialStep(ctx, "user", 1, 1); return err }},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			st, mr := newTestStore(t)
+			defer mr.Close()
+			mr.SetError("ERR injected failure")
+			if err := tt.call(st); err == nil {
+				t.Fatal("expected Redis error")
+			}
+		})
+	}
+}

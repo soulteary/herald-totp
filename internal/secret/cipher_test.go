@@ -104,6 +104,13 @@ func TestDecryptInvalid(t *testing.T) {
 }
 
 func TestEncryptInvalidKey(t *testing.T) {
+	if _, err := Encrypt([]byte("short"), "secret"); err == nil {
+		t.Error("Encrypt with invalid AES key should error")
+	}
+	if _, err := Decrypt([]byte("short"), "YQ=="); err == nil {
+		t.Error("Decrypt with invalid AES key should error")
+	}
+
 	// key length 1 is not 16/24/32, KeyBytes pads to 32 - so Encrypt gets 32 bytes
 	// Actually KeyBytes("x") returns 32-byte padded. So Encrypt will work.
 	// To get aes.NewCipher to fail we need key not 16/24/32. But KeyBytes always returns 16,24,32 or 32 padded.
