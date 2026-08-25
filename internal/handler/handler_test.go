@@ -969,7 +969,9 @@ func TestVerify_BackupCodeStoreError(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("SaveCredential: %v", err)
 	}
-	mr.Set("totp:backup:backup-error", "not-json")
+	if err := mr.Set("totp:backup:backup-error", "not-json"); err != nil {
+		t.Fatalf("seed invalid backup codes: %v", err)
+	}
 
 	app := fiber.New()
 	app.Post("/verify", Verify(st, log))
