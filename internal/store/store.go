@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"time"
 
@@ -9,12 +10,13 @@ import (
 )
 
 const (
-	credPrefix        = "totp:cred:"
-	enrollPrefix      = "totp:enroll:"
-	backupPrefix      = "totp:backup:"
-	chUsedPrefix      = "totp:ch_used:"
-	rateSubjectPrefix = "totp:rate:subject:"
-	rateIPPrefix      = "totp:rate:ip:"
+	credPrefix         = "totp:cred:"
+	enrollPrefix       = "totp:enroll:"
+	backupPrefix       = "totp:backup:"
+	chUsedPrefix       = "totp:ch_used:"
+	rateSubjectPrefix  = "totp:rate:subject:"
+	rateIPPrefix       = "totp:rate:ip:"
+	transactionRetries = 16
 )
 
 // Credential is the persisted TOTP credential for a subject.
@@ -86,6 +88,49 @@ func (s *Store) SaveCredential(ctx context.Context, c *Credential) error {
 	return s.rdb.Set(ctx, key, data, 0).Err()
 }
 
+// ClaimCredentialStep advances a credential's last-used TOTP counter with an
+// optimistic Redis transaction. It returns false when the counter was already
+// used, so concurrent requests cannot both accept the same TOTP code.
+func (s *Store) ClaimCredentialStep(ctx context.Context, subject string, step, updatedAt int64) (bool, error) {
+	key := credPrefix + subject
+	for range transactionRetries {
+		claimed := false
+		err := s.rdb.Watch(ctx, func(tx *redis.Tx) error {
+			data, err := tx.Get(ctx, key).Bytes()
+			if err != nil {
+				return err
+			}
+			var credential Credential
+			if err := json.Unmarshal(data, &credential); err != nil {
+				return err
+			}
+			if step <= credential.LastUsedStep {
+				return nil
+			}
+
+			credential.LastUsedStep = step
+			credential.UpdatedAt = updatedAt
+			encoded, err := json.Marshal(&credential)
+			if err != nil {
+				return err
+			}
+			_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+				pipe.Set(ctx, key, encoded, s.credTTL)
+				return nil
+			})
+			if err == nil {
+				claimed = true
+			}
+			return err
+		}, key)
+		if err == redis.TxFailedErr {
+			continue
+		}
+		return claimed, err
+	}
+	return false, redis.TxFailedErr
+}
+
 // GetCredential returns the credential for the subject, or nil if not found.
 func (s *Store) GetCredential(ctx context.Context, subject string) (*Credential, error) {
 	key := credPrefix + subject
@@ -149,6 +194,12 @@ func (s *Store) DeleteEnrollment(ctx context.Context, enrollID string) error {
 func (s *Store) MarkChallengeUsed(ctx context.Context, challengeID string) error {
 	key := chUsedPrefix + challengeID
 	return s.rdb.Set(ctx, key, "1", s.chUsedTTL).Err()
+}
+
+// ClaimChallenge records a challenge ID only if it has not already been used.
+func (s *Store) ClaimChallenge(ctx context.Context, challengeID string) (bool, error) {
+	key := chUsedPrefix + challengeID
+	return s.rdb.SetNX(ctx, key, "1", s.chUsedTTL).Result()
 }
 
 // IsChallengeUsed returns true if the challenge was already used.
@@ -216,16 +267,45 @@ func (s *Store) GetBackupCodes(ctx context.Context, subject string) ([]BackupCod
 
 // ConsumeBackupCode finds a matching unused backup code by hash, marks it used, returns true.
 func (s *Store) ConsumeBackupCode(ctx context.Context, subject string, codeHash string) (bool, error) {
-	entries, err := s.GetBackupCodes(ctx, subject)
-	if err != nil || len(entries) == 0 {
-		return false, err
-	}
-	now := time.Now().Unix()
-	for i := range entries {
-		if entries[i].CodeHash == codeHash && entries[i].UsedAt == 0 {
-			entries[i].UsedAt = now
-			return s.SaveBackupCodes(ctx, subject, entries) == nil, nil
+	key := backupPrefix + subject
+	for range transactionRetries {
+		consumed := false
+		err := s.rdb.Watch(ctx, func(tx *redis.Tx) error {
+			data, err := tx.Get(ctx, key).Bytes()
+			if err == redis.Nil {
+				return nil
+			}
+			if err != nil {
+				return err
+			}
+			var entries []BackupCodeEntry
+			if err := json.Unmarshal(data, &entries); err != nil {
+				return err
+			}
+			for i := range entries {
+				if entries[i].UsedAt != 0 || subtle.ConstantTimeCompare([]byte(entries[i].CodeHash), []byte(codeHash)) != 1 {
+					continue
+				}
+				entries[i].UsedAt = time.Now().Unix()
+				encoded, err := json.Marshal(entries)
+				if err != nil {
+					return err
+				}
+				_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+					pipe.Set(ctx, key, encoded, 0)
+					return nil
+				})
+				if err == nil {
+					consumed = true
+				}
+				return err
+			}
+			return nil
+		}, key)
+		if err == redis.TxFailedErr {
+			continue
 		}
+		return consumed, err
 	}
-	return false, nil
+	return false, redis.TxFailedErr
 }

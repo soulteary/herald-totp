@@ -87,6 +87,57 @@ func TestValidate(t *testing.T) {
 	}
 }
 
+func TestValidateWithStep_ReturnsMatchedSkewStep(t *testing.T) {
+	cfg := DefaultConfig("TestIssuer")
+	secretBase32, _, err := Generate("user@example.com", cfg)
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	now := time.Unix(1_700_000_010, 0)
+	future := now.Add(time.Duration(cfg.Period) * time.Second)
+	code, err := pqtotp.GenerateCodeCustom(secretBase32, future, pqtotp.ValidateOpts{
+		Period: cfg.Period, Skew: cfg.Skew, Digits: cfg.Digits, Algorithm: cfg.Algo,
+	})
+	if err != nil {
+		t.Fatalf("GenerateCodeCustom: %v", err)
+	}
+
+	valid, matchedStep, err := ValidateWithStep(code, secretBase32, cfg, now)
+	if err != nil {
+		t.Fatalf("ValidateWithStep: %v", err)
+	}
+	if !valid {
+		t.Fatal("future-window code should be valid")
+	}
+	wantStep := TimeStep(future, cfg.Period)
+	if matchedStep != wantStep {
+		t.Fatalf("matched step = %d, want %d", matchedStep, wantStep)
+	}
+}
+
+func TestValidateWithStep_DefaultPeriodAndErrors(t *testing.T) {
+	cfg := DefaultConfig("TestIssuer")
+	secretBase32, _, err := Generate("user@example.com", cfg)
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	now := time.Unix(1_700_000_010, 0)
+	code, err := pqtotp.GenerateCodeCustom(secretBase32, now, pqtotp.ValidateOpts{
+		Period: 30, Digits: cfg.Digits, Algorithm: cfg.Algo,
+	})
+	if err != nil {
+		t.Fatalf("GenerateCodeCustom: %v", err)
+	}
+	cfg.Period = 0
+	valid, matchedStep, err := ValidateWithStep(code, secretBase32, cfg, now)
+	if err != nil || !valid || matchedStep != TimeStep(now, 30) {
+		t.Fatalf("default-period validation = (%v, %d, %v)", valid, matchedStep, err)
+	}
+	if valid, _, err := ValidateWithStep("000000", "not-base32!", cfg, now); err == nil || valid {
+		t.Fatalf("invalid secret validation = (%v, %v), want error", valid, err)
+	}
+}
+
 func TestTimeStep(t *testing.T) {
 	epoch := time.Unix(0, 0)
 	if got := TimeStep(epoch, 30); got != 0 {

@@ -17,7 +17,7 @@ TOTP 2FA service for the Herald/Stargate stack: **enroll** (bind), **verify**, a
 - **Revoke**: `POST /v1/revoke` to remove TOTP credential and backup codes for a subject.
 - **Status**: `GET /v1/status?subject=...` to check if a user has TOTP enabled.
 - **Backup codes**: 10 one-time codes returned on confirm; can be used in verify when the device is lost.
-- **Security**: Encrypted secret storage (AES-GCM), rate limiting, time-step replay protection, API key or HMAC auth.
+- **Security**: Encrypted secret storage (AES-GCM), rate limiting, atomic one-time consumption of TOTP steps, backup codes, and challenge IDs, plus API key or HMAC auth.
 - **Graceful shutdown**: On `SIGINT` or `SIGTERM`, server stops accepting new requests and shuts down with a 10s timeout.
 
 ## Architecture

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -332,6 +333,58 @@ func TestVerify_Success(t *testing.T) {
 	}
 	if vOut.IssuedAt <= 0 {
 		t.Errorf("VerifyResponse.IssuedAt = %d, want > 0", vOut.IssuedAt)
+	}
+}
+
+func TestVerify_FutureWindowCodeCannotBeReused(t *testing.T) {
+	st, mr, log := setupHandlerTest(t)
+	defer mr.Close()
+	oldKey := config.EncryptionKey
+	oldSubjectLimit := config.RateLimitPerSubject
+	oldIPLimit := config.RateLimitPerIP
+	config.EncryptionKey = testEncryptionKey
+	config.RateLimitPerSubject = 100
+	config.RateLimitPerIP = 100
+	defer func() {
+		config.EncryptionKey = oldKey
+		config.RateLimitPerSubject = oldSubjectLimit
+		config.RateLimitPerIP = oldIPLimit
+	}()
+
+	cfg := totp.DefaultConfig("Herald")
+	secretBase32, _, err := totp.Generate("future-user", cfg)
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	keyBytes, _ := secret.KeyBytes(testEncryptionKey)
+	secretEnc, _ := secret.Encrypt(keyBytes, secretBase32)
+	cred := &store.Credential{
+		Subject: "future-user", SecretEnc: secretEnc, Issuer: "Herald", Label: "future-user",
+		Period: 30, Digits: 6, Algo: "SHA1", Enabled: true,
+	}
+	if err := st.SaveCredential(context.Background(), cred); err != nil {
+		t.Fatalf("SaveCredential: %v", err)
+	}
+	futureCode, err := pqtotp.GenerateCodeCustom(secretBase32, time.Now().Add(30*time.Second), pqtotp.ValidateOpts{
+		Period: 30, Skew: 1, Digits: totp.DigitsFromInt(6), Algorithm: totp.AlgorithmSHA1,
+	})
+	if err != nil {
+		t.Fatalf("GenerateCodeCustom: %v", err)
+	}
+
+	app := fiber.New()
+	app.Post("/verify", Verify(st, log))
+	body, _ := json.Marshal(VerifyRequest{Subject: "future-user", Code: futureCode})
+	for attempt, wantStatus := range []int{http.StatusOK, http.StatusBadRequest} {
+		req := httptest.NewRequest(http.MethodPost, "/verify", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := app.Test(req)
+		if err != nil {
+			t.Fatalf("attempt %d: app.Test: %v", attempt+1, err)
+		}
+		if resp.StatusCode != wantStatus {
+			t.Fatalf("attempt %d status = %d, want %d", attempt+1, resp.StatusCode, wantStatus)
+		}
 	}
 }
 

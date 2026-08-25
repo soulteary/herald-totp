@@ -102,6 +102,10 @@ http://localhost:8084
 | code         | string | 是  | 6 位 TOTP 或恢复码（如 ABCD-EFGH）。 |
 | challenge_id | string | 否  | 可选；用于防重放/审计（一次性）。   |
 
+服务会记录 `TOTP_SKEW` 容差窗口内实际匹配的 TOTP 时间步，并在 Redis 中原子认领。
+因此，即使验证码来自相邻时间步，也不能在服务进入该时间步后再次使用。恢复码和非空
+`challenge_id` 同样采用原子化的一次性消费。
+
 **响应（200）：**
 ```json
 {

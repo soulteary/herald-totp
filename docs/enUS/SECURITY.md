@@ -23,6 +23,13 @@ This document describes security considerations and recommendations for herald-t
 - **Redis**: Use a dedicated Redis instance or DB index for herald-totp. Enable Redis AUTH and TLS when available. Do not expose Redis to the public.
 - **Logging**: Avoid logging request bodies or headers that may contain TOTP codes or backup codes. Structured logs (e.g. subject, result, reason) are sufficient for operations and troubleshooting.
 
+## Replay Protection
+
+- The exact TOTP counter matched inside the configured skew window is claimed atomically in Redis. This prevents two concurrent requests from accepting the same code and prevents a future-window code from being accepted again when that window becomes current.
+- Backup codes are updated with an optimistic Redis transaction, so only one concurrent request can consume a code.
+- A non-empty `challenge_id` is claimed with Redis `SET NX`; reuse returns the `replay` reason.
+- Replay guarantees depend on Redis availability and consistency. Avoid splitting a subject's TOTP traffic across independent Redis datasets.
+
 ## Summary
 
 - Use **HERALD_TOTP_ENCRYPTION_KEY** (32 bytes) and keep it secret; never in code or committed config.

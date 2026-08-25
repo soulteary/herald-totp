@@ -111,16 +111,25 @@ func Verify(st *store.Store, log *logger.Logger) fiber.Handler {
 
 		cfg := totpConfigFromCred(cred)
 		now := time.Now()
-		valid, err := totp.Validate(req.Code, secretPlain, cfg, now)
+		valid, matchedStep, err := totp.ValidateWithStep(req.Code, secretPlain, cfg, now)
 		if !valid || err != nil {
 			// Try backup code (user might have lost device)
 			codeHash := secure.GetSHA256Hash(normalizeBackupCode(req.Code))
-			consumed, _ := st.ConsumeBackupCode(c.Context(), req.Subject, codeHash)
+			consumed, consumeErr := st.ConsumeBackupCode(c.Context(), req.Subject, codeHash)
+			if consumeErr != nil {
+				log.Warn().Err(consumeErr).Msg("verify: consume backup code failed")
+				return c.Status(fiber.StatusInternalServerError).JSON(VerifyErrorResponse{
+					OK: false, Reason: "internal_error",
+				})
+			}
 			if consumed {
-				metrics.RecordVerify("success", "backup_code")
-				if req.ChallengeID != "" {
-					_ = st.MarkChallengeUsed(c.Context(), req.ChallengeID)
+				if ok, err := claimChallenge(c, st, req.ChallengeID); err != nil {
+					return c.Status(fiber.StatusInternalServerError).JSON(VerifyErrorResponse{OK: false, Reason: "internal_error"})
+				} else if !ok {
+					metrics.RecordVerify("failure", "replay")
+					return c.Status(fiber.StatusBadRequest).JSON(VerifyErrorResponse{OK: false, Reason: "replay"})
 				}
+				metrics.RecordVerify("success", "backup_code")
 				issuedAt := time.Now().Unix()
 				return c.JSON(VerifyResponse{OK: true, Subject: req.Subject, AMR: []string{"totp", "backup_code"}, IssuedAt: issuedAt})
 			}
@@ -130,26 +139,33 @@ func Verify(st *store.Store, log *logger.Logger) fiber.Handler {
 			})
 		}
 
-		step := totp.TimeStep(now, uint(cred.Period))
-		if step <= cred.LastUsedStep {
+		claimed, err := st.ClaimCredentialStep(c.Context(), req.Subject, matchedStep, now.Unix())
+		if err != nil {
+			log.Warn().Err(err).Msg("verify: claim TOTP step failed")
+			return c.Status(fiber.StatusInternalServerError).JSON(VerifyErrorResponse{
+				OK: false, Reason: "internal_error",
+			})
+		}
+		if !claimed {
 			metrics.RecordVerify("failure", "replay")
 			return c.Status(fiber.StatusBadRequest).JSON(VerifyErrorResponse{
 				OK: false, Reason: "replay",
 			})
 		}
-
-		cred.LastUsedStep = step
-		cred.UpdatedAt = now.Unix()
-		if err := st.SaveCredential(c.Context(), cred); err != nil {
-			log.Warn().Err(err).Msg("verify: save credential failed")
-			return c.Status(fiber.StatusInternalServerError).JSON(VerifyErrorResponse{
-				OK: false, Reason: "internal_error",
-			})
+		if ok, err := claimChallenge(c, st, req.ChallengeID); err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(VerifyErrorResponse{OK: false, Reason: "internal_error"})
+		} else if !ok {
+			metrics.RecordVerify("failure", "replay")
+			return c.Status(fiber.StatusBadRequest).JSON(VerifyErrorResponse{OK: false, Reason: "replay"})
 		}
 		metrics.RecordVerify("success", "totp")
-		if req.ChallengeID != "" {
-			_ = st.MarkChallengeUsed(c.Context(), req.ChallengeID)
-		}
 		return c.JSON(VerifyResponse{OK: true, Subject: req.Subject, AMR: []string{"totp"}, IssuedAt: now.Unix()})
 	}
+}
+
+func claimChallenge(c *fiber.Ctx, st *store.Store, challengeID string) (bool, error) {
+	if challengeID == "" {
+		return true, nil
+	}
+	return st.ClaimChallenge(c.Context(), challengeID)
 }
