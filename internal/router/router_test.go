@@ -7,8 +7,8 @@ import (
 	"testing"
 
 	"github.com/alicebob/miniredis/v2"
-	"github.com/gofiber/fiber/v2"
-	logger "github.com/soulteary/logger-kit"
+	"github.com/gofiber/fiber/v3"
+	logger "github.com/soulteary/logger-kit/v2"
 
 	"github.com/soulteary/herald-totp/internal/config"
 )
@@ -33,7 +33,7 @@ func TestSetup(t *testing.T) {
 	}()
 
 	log := logger.New(logger.Config{Level: logger.Disabled})
-	app := fiber.New(fiber.Config{DisableStartupMessage: true})
+	app := fiber.New()
 	st, err := Setup(app, log)
 	if err != nil {
 		t.Fatalf("Setup: %v", err)
@@ -64,7 +64,7 @@ func TestSetup_RevokeRoute(t *testing.T) {
 	defer func() { config.RedisAddr = oldAddr }()
 
 	log := logger.New(logger.Config{Level: logger.Disabled})
-	app := fiber.New(fiber.Config{DisableStartupMessage: true})
+	app := fiber.New()
 	_, err = Setup(app, log)
 	if err != nil {
 		t.Fatalf("Setup: %v", err)
@@ -92,7 +92,7 @@ func TestSetup_StatusRoute(t *testing.T) {
 	defer func() { config.RedisAddr = oldAddr }()
 
 	log := logger.New(logger.Config{Level: logger.Disabled})
-	app := fiber.New(fiber.Config{DisableStartupMessage: true})
+	app := fiber.New()
 	_, err = Setup(app, log)
 	if err != nil {
 		t.Fatalf("Setup: %v", err)

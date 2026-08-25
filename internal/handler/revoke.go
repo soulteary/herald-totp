@@ -1,7 +1,7 @@
 package handler
 
 import (
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 
 	"github.com/soulteary/herald-totp/internal/store"
 )
@@ -19,9 +19,9 @@ type RevokeResponse struct {
 
 // Revoke handles POST /v1/revoke: remove TOTP credential and backup codes for the subject.
 func Revoke(st *store.Store) fiber.Handler {
-	return func(c *fiber.Ctx) error {
+	return func(c fiber.Ctx) error {
 		var req RevokeRequest
-		if err := c.BodyParser(&req); err != nil {
+		if err := c.Bind().Body(&req); err != nil {
 			return respondBadRequest(c, "invalid_request", err.Error())
 		}
 		if req.Subject == "" {

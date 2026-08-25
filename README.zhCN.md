@@ -10,6 +10,8 @@
 
 herald-totp 是 Herald/Stargate 栈的 TOTP 双因素认证服务：**绑定（enroll）**、**验证（verify）**、以及可选的**恢复码（backup codes）**。不发送验证码，用户通过验证器应用（如 Google Authenticator）生成 TOTP。Stargate 按用户调用 herald-totp 进行 TOTP 校验，而非使用单一全局密钥。
 
+HTTP 服务使用 Fiber v3.4.0 及与之匹配的 Fiber 相关 kit v2 模块版本。从源码构建需要 Go 1.26 或更高版本。
+
 ## 核心特性
 
 - **绑定**：`POST /v1/enroll/start`（返回二维码内容）与 `POST /v1/enroll/confirm`（用一次 TOTP 码确认）。

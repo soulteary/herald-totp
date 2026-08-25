@@ -8,13 +8,13 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 	"github.com/pterm/pterm"
 	"github.com/pterm/pterm/putils"
 	"github.com/soulteary/herald-totp/internal/config"
 	"github.com/soulteary/herald-totp/internal/router"
-	"github.com/soulteary/logger-kit"
-	version "github.com/soulteary/version-kit"
+	"github.com/soulteary/logger-kit/v2"
+	version "github.com/soulteary/version-kit/v2"
 )
 
 func showBanner() {
@@ -47,7 +47,7 @@ func main() {
 		log.Warn().Msg("HERALD_TOTP_ENCRYPTION_KEY not set or shorter than 32 bytes; enroll/verify will fail")
 	}
 
-	app := fiber.New(fiber.Config{DisableStartupMessage: false})
+	app := fiber.New()
 	st, err := router.Setup(app, log)
 	if err != nil {
 		log.Fatal().Err(err).Msg("router setup failed")
