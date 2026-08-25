@@ -145,6 +145,73 @@ func TestSaveGetEnrollment(t *testing.T) {
 	}
 }
 
+func TestConfirmEnrollment(t *testing.T) {
+	st, mr := newTestStore(t)
+	defer mr.Close()
+	ctx := context.Background()
+	enrollment := &Enrollment{EnrollID: "e_confirm", Subject: "confirm-user", SecretEnc: "secret", Period: 30, Digits: 6}
+	credential := &Credential{Subject: enrollment.Subject, SecretEnc: enrollment.SecretEnc, Period: 30, Digits: 6, Enabled: true}
+	entries := []BackupCodeEntry{{CodeHash: "hash1"}, {CodeHash: "hash2"}}
+	if err := st.SaveEnrollment(ctx, enrollment); err != nil {
+		t.Fatalf("SaveEnrollment: %v", err)
+	}
+
+	confirmed, err := st.ConfirmEnrollment(ctx, enrollment, credential, entries)
+	if err != nil || !confirmed {
+		t.Fatalf("ConfirmEnrollment = (%v, %v), want true", confirmed, err)
+	}
+	if got, err := st.GetEnrollment(ctx, enrollment.EnrollID); err != nil || got != nil {
+		t.Fatalf("enrollment after confirm = (%+v, %v), want nil", got, err)
+	}
+	if got, err := st.GetCredential(ctx, credential.Subject); err != nil || got == nil || !got.Enabled {
+		t.Fatalf("credential after confirm = (%+v, %v)", got, err)
+	}
+	if got, err := st.GetBackupCodes(ctx, credential.Subject); err != nil || len(got) != len(entries) {
+		t.Fatalf("backup codes after confirm = (%+v, %v)", got, err)
+	}
+	confirmed, err = st.ConfirmEnrollment(ctx, enrollment, credential, entries)
+	if err != nil || confirmed {
+		t.Fatalf("second ConfirmEnrollment = (%v, %v), want false", confirmed, err)
+	}
+}
+
+func TestConfirmEnrollment_Concurrent(t *testing.T) {
+	st, mr := newTestStore(t)
+	defer mr.Close()
+	ctx := context.Background()
+	enrollment := &Enrollment{EnrollID: "e_concurrent", Subject: "confirm-concurrent", SecretEnc: "secret", Period: 30, Digits: 6}
+	credential := &Credential{Subject: enrollment.Subject, SecretEnc: enrollment.SecretEnc, Period: 30, Digits: 6, Enabled: true}
+	entries := []BackupCodeEntry{{CodeHash: "hash"}}
+	if err := st.SaveEnrollment(ctx, enrollment); err != nil {
+		t.Fatalf("SaveEnrollment: %v", err)
+	}
+
+	const workers = 16
+	start := make(chan struct{})
+	var successes atomic.Int32
+	var wg sync.WaitGroup
+	for range workers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			confirmed, err := st.ConfirmEnrollment(ctx, enrollment, credential, entries)
+			if err != nil {
+				t.Errorf("ConfirmEnrollment: %v", err)
+				return
+			}
+			if confirmed {
+				successes.Add(1)
+			}
+		}()
+	}
+	close(start)
+	wg.Wait()
+	if got := successes.Load(); got != 1 {
+		t.Fatalf("successful confirmations = %d, want 1", got)
+	}
+}
+
 func TestGetEnrollment_InvalidJSON(t *testing.T) {
 	st, mr := newTestStore(t)
 	defer mr.Close()
@@ -212,6 +279,19 @@ func TestIncrRateSubject_IncrRateIP(t *testing.T) {
 	n, _ = st.IncrRateSubject(ctx, "user1")
 	if n != 2 {
 		t.Errorf("IncrRateSubject second = %d, want 2", n)
+	}
+	mr.FastForward(30 * time.Minute)
+	n, err = st.IncrRateSubject(ctx, "user1")
+	if err != nil || n != 3 {
+		t.Fatalf("IncrRateSubject after 30m = (%d, %v), want 3", n, err)
+	}
+	if ttl := mr.TTL(rateSubjectPrefix + "user1"); ttl != 30*time.Minute {
+		t.Fatalf("subject rate TTL = %v, want 30m (must not be extended)", ttl)
+	}
+	mr.FastForward(31 * time.Minute)
+	n, err = st.IncrRateSubject(ctx, "user1")
+	if err != nil || n != 1 {
+		t.Fatalf("IncrRateSubject after window = (%d, %v), want reset to 1", n, err)
 	}
 	n, err = st.IncrRateIP(ctx, "1.2.3.4")
 	if err != nil {
@@ -332,6 +412,28 @@ func TestDeleteCredential_DeleteBackupCodes(t *testing.T) {
 	gotEntries, _ := st.GetBackupCodes(ctx, "del2")
 	if gotEntries != nil {
 		t.Errorf("GetBackupCodes after Delete = %v, want nil", gotEntries)
+	}
+}
+
+func TestDeleteSubject(t *testing.T) {
+	st, mr := newTestStore(t)
+	defer mr.Close()
+	ctx := context.Background()
+	credential := &Credential{Subject: "delete-subject", SecretEnc: "enc", Enabled: true}
+	if err := st.SaveCredential(ctx, credential); err != nil {
+		t.Fatalf("SaveCredential: %v", err)
+	}
+	if err := st.SaveBackupCodes(ctx, credential.Subject, []BackupCodeEntry{{CodeHash: "hash"}}); err != nil {
+		t.Fatalf("SaveBackupCodes: %v", err)
+	}
+	if err := st.DeleteSubject(ctx, credential.Subject); err != nil {
+		t.Fatalf("DeleteSubject: %v", err)
+	}
+	if got, _ := st.GetCredential(ctx, credential.Subject); got != nil {
+		t.Fatalf("credential after DeleteSubject = %+v", got)
+	}
+	if got, _ := st.GetBackupCodes(ctx, credential.Subject); got != nil {
+		t.Fatalf("backup codes after DeleteSubject = %+v", got)
 	}
 }
 

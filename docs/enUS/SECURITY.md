@@ -29,6 +29,8 @@ This document describes security considerations and recommendations for herald-t
 - Backup codes are updated with an optimistic Redis transaction, so only one concurrent request can consume a code.
 - A non-empty `challenge_id` is claimed with Redis `SET NX`; reuse returns the `replay` reason.
 - Replay guarantees depend on Redis availability and consistency. Avoid splitting a subject's TOTP traffic across independent Redis datasets.
+- Enrollment confirmation commits the credential, backup-code hashes, and enrollment consumption in one Redis transaction. Revocation deletes the credential and backup codes atomically.
+- Rate-limit counters keep the expiry established by the first request in each window; later requests cannot indefinitely extend a blocked counter.
 
 ## Summary
 

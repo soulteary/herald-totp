@@ -66,16 +66,15 @@ func Verify(st *store.Store, log *logger.Logger) fiber.Handler {
 			}
 		}
 
-		// Rate limit
-		subjectCount, _ := st.IncrRateSubject(c.Context(), req.Subject)
-		if subjectCount > int64(config.RateLimitPerSubject) {
-			metrics.RecordVerify("failure", "rate_limited")
-			return c.Status(fiber.StatusTooManyRequests).JSON(VerifyErrorResponse{
-				OK: false, Reason: "rate_limited",
+		limited, err := rateLimitExceeded(c, st, req.Subject)
+		if err != nil {
+			log.Warn().Err(err).Msg("verify: rate limit failed")
+			metrics.RecordVerify("failure", "internal_error")
+			return c.Status(fiber.StatusInternalServerError).JSON(VerifyErrorResponse{
+				OK: false, Reason: "internal_error",
 			})
 		}
-		ipCount, _ := st.IncrRateIP(c.Context(), c.IP())
-		if ipCount > int64(config.RateLimitPerIP) {
+		if limited {
 			metrics.RecordVerify("failure", "rate_limited")
 			return c.Status(fiber.StatusTooManyRequests).JSON(VerifyErrorResponse{
 				OK: false, Reason: "rate_limited",

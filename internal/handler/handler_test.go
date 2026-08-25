@@ -29,7 +29,7 @@ func setupHandlerTest(t *testing.T) (*store.Store, *miniredis.Miniredis, *logger
 	if err != nil {
 		t.Fatalf("miniredis: %v", err)
 	}
-	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr(), MaxRetries: -1})
 	enrollTTL := 10 * time.Minute
 	chUsedTTL := 5 * time.Minute
 	rateSubTTL := time.Hour
@@ -244,6 +244,36 @@ func TestEnrollConfirm_Success(t *testing.T) {
 	_ = json.NewDecoder(resp.Body).Decode(&confirmOut)
 	if !confirmOut.TotpEnabled || confirmOut.Subject != "user2" {
 		t.Errorf("confirm response = %+v", confirmOut)
+	}
+
+	// The temporary enrollment is consumed by the same transaction that saves
+	// the credential and backup codes.
+	req = httptest.NewRequest("POST", "/enroll/confirm", bytes.NewReader(confirmBody))
+	req.Header.Set("Content-Type", "application/json")
+	resp, _ = app.Test(req)
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("second enroll confirm status = %d, want 400", resp.StatusCode)
+	}
+}
+
+func TestEnrollStart_RedisError(t *testing.T) {
+	st, mr, log := setupHandlerTest(t)
+	defer mr.Close()
+	oldKey := config.EncryptionKey
+	config.EncryptionKey = testEncryptionKey
+	defer func() { config.EncryptionKey = oldKey }()
+	mr.SetError("ERR injected failure")
+
+	app := fiber.New()
+	app.Post("/enroll/start", EnrollStart(st, log))
+	req := httptest.NewRequest(http.MethodPost, "/enroll/start", bytes.NewReader([]byte(`{"subject":"redis-error"}`)))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req, 5_000)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	if resp.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500", resp.StatusCode)
 	}
 }
 
@@ -650,5 +680,22 @@ func TestRevoke_RateLimited(t *testing.T) {
 	resp, _ := app.Test(req)
 	if resp.StatusCode != 429 {
 		t.Errorf("revoke rate limited status = %d, want 429", resp.StatusCode)
+	}
+}
+
+func TestRevoke_RedisError(t *testing.T) {
+	st, mr, _ := setupHandlerTest(t)
+	defer mr.Close()
+	mr.SetError("ERR injected failure")
+	app := fiber.New()
+	app.Post("/revoke", Revoke(st))
+	req := httptest.NewRequest(http.MethodPost, "/revoke", bytes.NewReader([]byte(`{"subject":"redis-error"}`)))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req, 5_000)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	if resp.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500", resp.StatusCode)
 	}
 }

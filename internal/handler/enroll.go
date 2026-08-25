@@ -61,12 +61,12 @@ func EnrollStart(st *store.Store, log *logger.Logger) fiber.Handler {
 			return respondConfigError(c, "encryption not configured")
 		}
 
-		subjectCount, _ := st.IncrRateSubject(c.Context(), req.Subject)
-		if subjectCount > int64(config.RateLimitPerSubject) {
-			return respondRateLimited(c)
+		limited, err := rateLimitExceeded(c, st, req.Subject)
+		if err != nil {
+			log.Warn().Err(err).Msg("enroll start: rate limit failed")
+			return respondInternalError(c)
 		}
-		ipCount, _ := st.IncrRateIP(c.Context(), c.IP())
-		if ipCount > int64(config.RateLimitPerIP) {
+		if limited {
 			return respondRateLimited(c)
 		}
 
@@ -156,7 +156,6 @@ func EnrollConfirm(st *store.Store, log *logger.Logger) fiber.Handler {
 			return respondBadRequest(c, "invalid", "code verification failed")
 		}
 
-		metrics.RecordEnrollConfirm("success")
 		now := time.Now()
 		cred := &store.Credential{
 			Subject:      e.Subject,
@@ -171,21 +170,23 @@ func EnrollConfirm(st *store.Store, log *logger.Logger) fiber.Handler {
 			CreatedAt:    now.Unix(),
 			UpdatedAt:    now.Unix(),
 		}
-		if err := st.SaveCredential(c.Context(), cred); err != nil {
-			log.Warn().Err(err).Msg("enroll confirm: save credential failed")
-			return respondInternalError(c)
-		}
-		_ = st.DeleteEnrollment(c.Context(), req.EnrollID)
-
-		// Optional: generate backup codes (10 single-use codes)
+		// Generate and persist backup codes as part of the enrollment transaction.
 		backupCodes := generateBackupCodes(10)
 		entries := make([]store.BackupCodeEntry, len(backupCodes))
 		for i, code := range backupCodes {
 			entries[i] = store.BackupCodeEntry{CodeHash: secure.GetSHA256Hash(normalizeBackupCode(code)), UsedAt: 0}
 		}
-		if err := st.SaveBackupCodes(c.Context(), e.Subject, entries); err != nil {
-			log.Warn().Err(err).Msg("enroll confirm: save backup codes failed")
+		confirmed, err := st.ConfirmEnrollment(c.Context(), e, cred, entries)
+		if err != nil {
+			log.Warn().Err(err).Msg("enroll confirm: commit failed")
+			metrics.RecordEnrollConfirm("failure")
+			return respondInternalError(c)
 		}
+		if !confirmed {
+			metrics.RecordEnrollConfirm("failure")
+			return respondBadRequest(c, "expired", "enrollment not found, expired, or already confirmed")
+		}
+		metrics.RecordEnrollConfirm("success")
 
 		return c.JSON(EnrollConfirmResponse{
 			Subject:     e.Subject,

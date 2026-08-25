@@ -24,8 +24,8 @@
 | HMAC_SECRET | | 可选；HMAC 鉴权。 |
 | HERALD_TOTP_HMAC_KEYS | | 可选；JSON 密钥映射，支持轮换。 |
 | SERVICE_NAME | herald-totp | 服务名（如 HMAC 用）。 |
-| RATE_LIMIT_PER_SUBJECT | 20 | 每 subject 每小时请求上限。 |
-| RATE_LIMIT_PER_IP | 30 | 每 IP 每分钟请求上限。 |
+| RATE_LIMIT_PER_SUBJECT | 20 | 每 subject 固定一小时窗口的请求上限；窗口从首次请求开始。 |
+| RATE_LIMIT_PER_IP | 30 | 每 IP 固定一分钟窗口的请求上限；窗口从首次请求开始。 |
 
 ## 运行
 

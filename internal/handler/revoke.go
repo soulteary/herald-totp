@@ -3,7 +3,6 @@ package handler
 import (
 	"github.com/gofiber/fiber/v2"
 
-	"github.com/soulteary/herald-totp/internal/config"
 	"github.com/soulteary/herald-totp/internal/store"
 )
 
@@ -29,17 +28,17 @@ func Revoke(st *store.Store) fiber.Handler {
 			return respondBadRequest(c, "invalid_request", "subject is required")
 		}
 
-		subjectCount, _ := st.IncrRateSubject(c.Context(), req.Subject)
-		if subjectCount > int64(config.RateLimitPerSubject) {
-			return respondRateLimited(c)
+		limited, err := rateLimitExceeded(c, st, req.Subject)
+		if err != nil {
+			return respondInternalError(c)
 		}
-		ipCount, _ := st.IncrRateIP(c.Context(), c.IP())
-		if ipCount > int64(config.RateLimitPerIP) {
+		if limited {
 			return respondRateLimited(c)
 		}
 
-		_ = st.DeleteCredential(c.Context(), req.Subject)
-		_ = st.DeleteBackupCodes(c.Context(), req.Subject)
+		if err := st.DeleteSubject(c.Context(), req.Subject); err != nil {
+			return respondInternalError(c)
+		}
 		return c.JSON(RevokeResponse{OK: true, Subject: req.Subject})
 	}
 }

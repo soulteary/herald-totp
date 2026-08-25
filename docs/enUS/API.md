@@ -68,6 +68,10 @@ When `EXPOSE_SECRET_IN_ENROLL=false`, `secret_base32` is omitted (only `otpauth_
 
 User has scanned the QR and enters one TOTP code to confirm. On success, credential is saved and optional backup codes are returned.
 
+The credential, backup-code hashes, and temporary enrollment are committed in
+one Redis transaction. An `enroll_id` can therefore be confirmed only once,
+and backup codes are never returned unless their hashes were persisted.
+
 **Request body:**
 
 | Field     | Type   | Required | Description           |
@@ -133,6 +137,10 @@ When verified via backup code, `amr` is `["totp", "backup_code"]`.
 **POST /v1/revoke**
 
 Remove TOTP credential and backup codes for the subject (disenroll).
+
+The credential and backup codes are removed with one atomic Redis command. A
+storage failure returns `500 internal_error` rather than reporting a successful
+revocation.
 
 **Request body:**
 
