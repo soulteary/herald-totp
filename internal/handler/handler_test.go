@@ -88,6 +88,31 @@ func TestEnrollStart_ConfigError(t *testing.T) {
 	}
 }
 
+func TestEnrollStart_GenerateError(t *testing.T) {
+	st, mr, log := setupHandlerTest(t)
+	defer mr.Close()
+	oldKey, oldIssuer := config.EncryptionKey, config.TOTPIssuer
+	oldSubjectLimit, oldIPLimit := config.RateLimitPerSubject, config.RateLimitPerIP
+	config.EncryptionKey, config.TOTPIssuer = testEncryptionKey, ""
+	config.RateLimitPerSubject, config.RateLimitPerIP = 100, 100
+	defer func() {
+		config.EncryptionKey, config.TOTPIssuer = oldKey, oldIssuer
+		config.RateLimitPerSubject, config.RateLimitPerIP = oldSubjectLimit, oldIPLimit
+	}()
+
+	app := fiber.New()
+	app.Post("/enroll/start", EnrollStart(st, log))
+	req := httptest.NewRequest(http.MethodPost, "/enroll/start", bytes.NewBufferString(`{"subject":"generate-error"}`))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	if resp.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500", resp.StatusCode)
+	}
+}
+
 func TestEnrollStart_Success(t *testing.T) {
 	st, mr, log := setupHandlerTest(t)
 	defer mr.Close()
@@ -343,7 +368,8 @@ func TestVerify_Success(t *testing.T) {
 		Period: uint(config.TOTPPeriod), Skew: uint(config.TOTPSkew),
 		Digits: totp.DigitsFromInt(config.TOTPDigits), Algorithm: totp.AlgorithmSHA1,
 	})
-	verifyBody, _ := json.Marshal(VerifyRequest{Subject: "vuser", Code: code2})
+	const challengeID = "c_verify_success"
+	verifyBody, _ := json.Marshal(VerifyRequest{Subject: "vuser", Code: code2, ChallengeID: challengeID})
 	req = httptest.NewRequest("POST", "/verify", bytes.NewReader(verifyBody))
 	req.Header.Set("Content-Type", "application/json")
 	resp, _ = app.Test(req)
@@ -363,6 +389,10 @@ func TestVerify_Success(t *testing.T) {
 	}
 	if vOut.IssuedAt <= 0 {
 		t.Errorf("VerifyResponse.IssuedAt = %d, want > 0", vOut.IssuedAt)
+	}
+	used, err := st.IsChallengeUsed(context.Background(), challengeID)
+	if err != nil || !used {
+		t.Errorf("challenge used = (%v, %v), want (true, nil)", used, err)
 	}
 }
 
@@ -633,6 +663,22 @@ func TestRevoke_BadRequest(t *testing.T) {
 	}
 }
 
+func TestRevoke_MalformedRequest(t *testing.T) {
+	st, mr, _ := setupHandlerTest(t)
+	defer mr.Close()
+	app := fiber.New()
+	app.Post("/revoke", Revoke(st))
+	req := httptest.NewRequest(http.MethodPost, "/revoke", bytes.NewBufferString("{"))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", resp.StatusCode)
+	}
+}
+
 func TestRevoke_Success(t *testing.T) {
 	st, mr, _ := setupHandlerTest(t)
 	defer mr.Close()
@@ -697,5 +743,287 @@ func TestRevoke_RedisError(t *testing.T) {
 	}
 	if resp.StatusCode != http.StatusInternalServerError {
 		t.Fatalf("status = %d, want 500", resp.StatusCode)
+	}
+}
+
+func TestEnrollConfirm_MalformedRequest(t *testing.T) {
+	st, mr, log := setupHandlerTest(t)
+	defer mr.Close()
+	app := fiber.New()
+	app.Post("/enroll/confirm", EnrollConfirm(st, log))
+
+	req := httptest.NewRequest(http.MethodPost, "/enroll/confirm", bytes.NewBufferString("{"))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", resp.StatusCode)
+	}
+}
+
+func TestEnrollConfirm_ConfigError(t *testing.T) {
+	st, mr, log := setupHandlerTest(t)
+	defer mr.Close()
+	oldKey := config.EncryptionKey
+	config.EncryptionKey = ""
+	defer func() { config.EncryptionKey = oldKey }()
+
+	app := fiber.New()
+	app.Post("/enroll/confirm", EnrollConfirm(st, log))
+	req := httptest.NewRequest(http.MethodPost, "/enroll/confirm", bytes.NewBufferString(`{"enroll_id":"e_config","code":"123456"}`))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	if resp.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500", resp.StatusCode)
+	}
+}
+
+func TestEnrollConfirm_RedisError(t *testing.T) {
+	st, mr, log := setupHandlerTest(t)
+	defer mr.Close()
+	oldKey := config.EncryptionKey
+	config.EncryptionKey = testEncryptionKey
+	defer func() { config.EncryptionKey = oldKey }()
+	mr.SetError("ERR injected failure")
+
+	app := fiber.New()
+	app.Post("/enroll/confirm", EnrollConfirm(st, log))
+	req := httptest.NewRequest(http.MethodPost, "/enroll/confirm", bytes.NewBufferString(`{"enroll_id":"e_redis","code":"123456"}`))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req, 5_000)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	if resp.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500", resp.StatusCode)
+	}
+}
+
+func TestEnrollConfirm_DecryptError(t *testing.T) {
+	st, mr, log := setupHandlerTest(t)
+	defer mr.Close()
+	oldKey := config.EncryptionKey
+	config.EncryptionKey = testEncryptionKey
+	defer func() { config.EncryptionKey = oldKey }()
+	if err := st.SaveEnrollment(context.Background(), &store.Enrollment{
+		EnrollID: "e_bad_secret", Subject: "user", SecretEnc: "not-ciphertext", Period: 30, Digits: 6,
+	}); err != nil {
+		t.Fatalf("SaveEnrollment: %v", err)
+	}
+
+	app := fiber.New()
+	app.Post("/enroll/confirm", EnrollConfirm(st, log))
+	req := httptest.NewRequest(http.MethodPost, "/enroll/confirm", bytes.NewBufferString(`{"enroll_id":"e_bad_secret","code":"123456"}`))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	if resp.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500", resp.StatusCode)
+	}
+}
+
+func TestEnrollConfirm_InvalidCode(t *testing.T) {
+	st, mr, log := setupHandlerTest(t)
+	defer mr.Close()
+	oldKey := config.EncryptionKey
+	config.EncryptionKey = testEncryptionKey
+	defer func() { config.EncryptionKey = oldKey }()
+	secretBase32, _, err := totp.Generate("confirm-invalid", totp.DefaultConfig("Herald"))
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	keyBytes, err := secret.KeyBytes(testEncryptionKey)
+	if err != nil {
+		t.Fatalf("KeyBytes: %v", err)
+	}
+	secretEnc, err := secret.Encrypt(keyBytes, secretBase32)
+	if err != nil {
+		t.Fatalf("Encrypt: %v", err)
+	}
+	if err := st.SaveEnrollment(context.Background(), &store.Enrollment{
+		EnrollID: "e_invalid_code", Subject: "user", SecretEnc: secretEnc, Period: 30, Digits: 6,
+	}); err != nil {
+		t.Fatalf("SaveEnrollment: %v", err)
+	}
+
+	app := fiber.New()
+	app.Post("/enroll/confirm", EnrollConfirm(st, log))
+	req := httptest.NewRequest(http.MethodPost, "/enroll/confirm", bytes.NewBufferString(`{"enroll_id":"e_invalid_code","code":"not-a-code"}`))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", resp.StatusCode)
+	}
+}
+
+func TestStatus_RedisError(t *testing.T) {
+	st, mr, _ := setupHandlerTest(t)
+	defer mr.Close()
+	mr.SetError("ERR injected failure")
+	app := fiber.New()
+	app.Get("/status", Status(st))
+
+	resp, err := app.Test(httptest.NewRequest(http.MethodGet, "/status?subject=user", nil), 5_000)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	if resp.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500", resp.StatusCode)
+	}
+}
+
+func TestVerify_ErrorBranches(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+		seed func(*testing.T, *store.Store, *miniredis.Miniredis)
+	}{
+		{name: "malformed request", body: "{"},
+		{name: "challenge lookup", body: `{"subject":"user","code":"123456","challenge_id":"c_error"}`, seed: func(_ *testing.T, _ *store.Store, mr *miniredis.Miniredis) {
+			mr.SetError("ERR injected failure")
+		}},
+		{name: "rate limit", body: `{"subject":"user","code":"123456"}`, seed: func(_ *testing.T, _ *store.Store, mr *miniredis.Miniredis) {
+			mr.SetError("ERR injected failure")
+		}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			st, mr, log := setupHandlerTest(t)
+			defer mr.Close()
+			if tt.seed != nil {
+				tt.seed(t, st, mr)
+			}
+			app := fiber.New()
+			app.Post("/verify", Verify(st, log))
+			req := httptest.NewRequest(http.MethodPost, "/verify", bytes.NewBufferString(tt.body))
+			req.Header.Set("Content-Type", "application/json")
+			resp, err := app.Test(req, 5_000)
+			if err != nil {
+				t.Fatalf("app.Test: %v", err)
+			}
+			want := http.StatusInternalServerError
+			if tt.name == "malformed request" {
+				want = http.StatusBadRequest
+			}
+			if resp.StatusCode != want {
+				t.Fatalf("status = %d, want %d", resp.StatusCode, want)
+			}
+		})
+	}
+}
+
+func TestVerify_DecryptError(t *testing.T) {
+	st, mr, log := setupHandlerTest(t)
+	defer mr.Close()
+	oldKey, oldSubjectLimit, oldIPLimit := config.EncryptionKey, config.RateLimitPerSubject, config.RateLimitPerIP
+	config.EncryptionKey, config.RateLimitPerSubject, config.RateLimitPerIP = testEncryptionKey, 100, 100
+	defer func() {
+		config.EncryptionKey, config.RateLimitPerSubject, config.RateLimitPerIP = oldKey, oldSubjectLimit, oldIPLimit
+	}()
+	if err := st.SaveCredential(context.Background(), &store.Credential{
+		Subject: "decrypt-error", SecretEnc: "not-ciphertext", Period: 30, Digits: 6, Enabled: true,
+	}); err != nil {
+		t.Fatalf("SaveCredential: %v", err)
+	}
+
+	app := fiber.New()
+	app.Post("/verify", Verify(st, log))
+	req := httptest.NewRequest(http.MethodPost, "/verify", bytes.NewBufferString(`{"subject":"decrypt-error","code":"123456"}`))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	if resp.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500", resp.StatusCode)
+	}
+}
+
+func TestVerify_BackupCodeStoreError(t *testing.T) {
+	st, mr, log := setupHandlerTest(t)
+	defer mr.Close()
+	oldKey, oldSubjectLimit, oldIPLimit := config.EncryptionKey, config.RateLimitPerSubject, config.RateLimitPerIP
+	config.EncryptionKey, config.RateLimitPerSubject, config.RateLimitPerIP = testEncryptionKey, 100, 100
+	defer func() {
+		config.EncryptionKey, config.RateLimitPerSubject, config.RateLimitPerIP = oldKey, oldSubjectLimit, oldIPLimit
+	}()
+	secretBase32, _, err := totp.Generate("backup-error", totp.DefaultConfig("Herald"))
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	keyBytes, _ := secret.KeyBytes(testEncryptionKey)
+	secretEnc, _ := secret.Encrypt(keyBytes, secretBase32)
+	if err := st.SaveCredential(context.Background(), &store.Credential{
+		Subject: "backup-error", SecretEnc: secretEnc, Period: 30, Digits: 6, Enabled: true,
+	}); err != nil {
+		t.Fatalf("SaveCredential: %v", err)
+	}
+	if err := mr.Set("totp:backup:backup-error", "not-json"); err != nil {
+		t.Fatalf("seed invalid backup codes: %v", err)
+	}
+
+	app := fiber.New()
+	app.Post("/verify", Verify(st, log))
+	req := httptest.NewRequest(http.MethodPost, "/verify", bytes.NewBufferString(`{"subject":"backup-error","code":"not-a-code"}`))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test: %v", err)
+	}
+	if resp.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500", resp.StatusCode)
+	}
+}
+
+func TestIPRateLimit(t *testing.T) {
+	tests := []struct {
+		name string
+		path string
+		body string
+		bind func(*fiber.App, *store.Store, *logger.Logger)
+	}{
+		{name: "enroll start", path: "/enroll/start", body: `{"subject":"ip-limited"}`, bind: func(app *fiber.App, st *store.Store, log *logger.Logger) {
+			app.Post("/enroll/start", EnrollStart(st, log))
+		}},
+		{name: "verify", path: "/verify", body: `{"subject":"ip-limited","code":"123456"}`, bind: func(app *fiber.App, st *store.Store, log *logger.Logger) {
+			app.Post("/verify", Verify(st, log))
+		}},
+		{name: "revoke", path: "/revoke", body: `{"subject":"ip-limited"}`, bind: func(app *fiber.App, st *store.Store, _ *logger.Logger) {
+			app.Post("/revoke", Revoke(st))
+		}},
+	}
+
+	oldKey, oldSubjectLimit, oldIPLimit := config.EncryptionKey, config.RateLimitPerSubject, config.RateLimitPerIP
+	config.EncryptionKey, config.RateLimitPerSubject, config.RateLimitPerIP = testEncryptionKey, 100, 0
+	defer func() {
+		config.EncryptionKey, config.RateLimitPerSubject, config.RateLimitPerIP = oldKey, oldSubjectLimit, oldIPLimit
+	}()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			st, mr, log := setupHandlerTest(t)
+			defer mr.Close()
+			app := fiber.New()
+			tt.bind(app, st, log)
+			req := httptest.NewRequest(http.MethodPost, tt.path, bytes.NewBufferString(tt.body))
+			req.Header.Set("Content-Type", "application/json")
+			resp, err := app.Test(req)
+			if err != nil {
+				t.Fatalf("app.Test: %v", err)
+			}
+			if resp.StatusCode != http.StatusTooManyRequests {
+				t.Fatalf("status = %d, want 429", resp.StatusCode)
+			}
+		})
 	}
 }

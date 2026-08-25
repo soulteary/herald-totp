@@ -3,11 +3,18 @@ package heraldtotp
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 )
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
+}
 
 func TestNewClient_EmptyBaseURL(t *testing.T) {
 	_, err := NewClient(DefaultOptions().WithBaseURL(""))
@@ -15,6 +22,118 @@ func TestNewClient_EmptyBaseURL(t *testing.T) {
 		t.Fatal("expected error when base URL is empty")
 	}
 }
+
+func TestNewClient_NilOptions(t *testing.T) {
+	if _, err := NewClient(nil); err == nil {
+		t.Fatal("NewClient(nil) should require a base URL")
+	}
+}
+
+func TestClient_RequestCreationErrors(t *testing.T) {
+	client, err := NewClient(DefaultOptions().WithBaseURL("%"))
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+	tests := []struct {
+		name string
+		call func() error
+	}{
+		{name: "status", call: func() error { _, err := client.Status(context.Background(), "user"); return err }},
+		{name: "enroll start", call: func() error { _, err := client.EnrollStart(context.Background(), &EnrollStartRequest{}); return err }},
+		{name: "enroll confirm", call: func() error {
+			_, err := client.EnrollConfirm(context.Background(), &EnrollConfirmRequest{})
+			return err
+		}},
+		{name: "revoke", call: func() error { _, err := client.Revoke(context.Background(), "user"); return err }},
+		{name: "verify", call: func() error { _, err := client.Verify(context.Background(), &VerifyRequest{}); return err }},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := tt.call(); err == nil {
+				t.Fatal("expected request creation error")
+			}
+		})
+	}
+}
+
+func TestClient_TransportErrors(t *testing.T) {
+	errTransport := errors.New("transport failed")
+	client, err := NewClient(DefaultOptions().WithBaseURL("http://example.test"))
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+	client.httpClient.Transport = roundTripFunc(func(*http.Request) (*http.Response, error) {
+		return nil, errTransport
+	})
+	tests := []struct {
+		name string
+		call func() error
+	}{
+		{name: "status", call: func() error { _, err := client.Status(context.Background(), "user"); return err }},
+		{name: "enroll start", call: func() error { _, err := client.EnrollStart(context.Background(), &EnrollStartRequest{}); return err }},
+		{name: "enroll confirm", call: func() error {
+			_, err := client.EnrollConfirm(context.Background(), &EnrollConfirmRequest{})
+			return err
+		}},
+		{name: "revoke", call: func() error { _, err := client.Revoke(context.Background(), "user"); return err }},
+		{name: "verify", call: func() error { _, err := client.Verify(context.Background(), &VerifyRequest{}); return err }},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := tt.call(); !errors.Is(err, errTransport) {
+				t.Fatalf("error = %v, want transport failed", err)
+			}
+		})
+	}
+}
+
+func TestClient_ResponseEdgeCases(t *testing.T) {
+	tests := []struct {
+		name    string
+		status  int
+		body    string
+		call    func(*Client) error
+		wantErr bool
+	}{
+		{name: "enroll start invalid JSON", status: http.StatusOK, body: "not-json", call: func(c *Client) error {
+			_, err := c.EnrollStart(context.Background(), &EnrollStartRequest{})
+			return err
+		}, wantErr: true},
+		{name: "enroll confirm non-OK", status: http.StatusBadRequest, body: `{}`, call: func(c *Client) error {
+			_, err := c.EnrollConfirm(context.Background(), &EnrollConfirmRequest{})
+			return err
+		}, wantErr: true},
+		{name: "revoke invalid JSON", status: http.StatusOK, body: "not-json", call: func(c *Client) error { _, err := c.Revoke(context.Background(), "user"); return err }, wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(tt.status)
+				_, _ = w.Write([]byte(tt.body))
+			}))
+			defer server.Close()
+			client, err := NewClient(DefaultOptions().WithBaseURL(server.URL))
+			if err != nil {
+				t.Fatalf("NewClient: %v", err)
+			}
+			err = tt.call(client)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestComputeHMAC_WithBody(t *testing.T) {
+	client := &Client{hmacSecret: "secret"}
+	withoutBody := client.computeHMAC("1", "service", nil)
+	withBody := client.computeHMAC("1", "service", []byte(`{"ok":true}`))
+	if withoutBody == withBody || len(withBody) != sha256HexLength {
+		t.Fatalf("unexpected HMAC values: without=%q with=%q", withoutBody, withBody)
+	}
+}
+
+const sha256HexLength = 64
 
 func TestClient_Status_Verify_Revoke(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

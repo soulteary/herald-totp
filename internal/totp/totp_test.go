@@ -56,6 +56,29 @@ func TestGenerate(t *testing.T) {
 	}
 }
 
+func TestGenerate_InvalidOptions(t *testing.T) {
+	tests := []struct {
+		name        string
+		issuer      string
+		accountName string
+	}{
+		{name: "missing issuer", accountName: "user@example.com"},
+		{name: "missing account name", issuer: "TestIssuer"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := DefaultConfig(tt.issuer)
+			secret, uri, err := Generate(tt.accountName, cfg)
+			if err == nil {
+				t.Fatalf("Generate = (%q, %q, nil), want error", secret, uri)
+			}
+			if secret != "" || uri != "" {
+				t.Fatalf("Generate error returned data: secret=%q uri=%q", secret, uri)
+			}
+		})
+	}
+}
+
 func TestValidate(t *testing.T) {
 	cfg := DefaultConfig("TestIssuer")
 	secretBase32, _, err := Generate("user@example.com", cfg)
