@@ -81,7 +81,7 @@ herald-totp 已配置 `API_KEY`（或 HMAC），但请求未携带对应头或�
 
 ### 原因与处理
 
-- **expired**：来自 `POST /v1/enroll/start` 的 enroll_id 已过期（默认 TTL 10 分钟）。需重新发起绑定：再次调用 enroll/start，让用户扫描新二维码，再向 enroll/confirm 提交新码。
+- **expired**：来自 `POST /v1/enroll/start` 的 enroll_id 已过期、已被确认或因其他原因不再可用（默认 TTL 10 分钟）。需重新发起绑定：再次调用 enroll/start，让用户扫描新二维码，再向 enroll/confirm 提交新码。
 - **invalid**：提交的 6 位 TOTP 与当前临时密钥不匹配。确认用户验证器时间已同步并输入当前码；确认 TOTP 周期（默认 30 秒）与 skew 一致。
 
 ---

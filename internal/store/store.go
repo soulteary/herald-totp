@@ -19,6 +19,14 @@ const (
 	transactionRetries = 16
 )
 
+var incrementRateScript = redis.NewScript(`
+local count = redis.call("INCR", KEYS[1])
+if count == 1 then
+  redis.call("PEXPIRE", KEYS[1], ARGV[1])
+end
+return count
+`)
+
 // Credential is the persisted TOTP credential for a subject.
 type Credential struct {
 	Subject      string `json:"subject"`
@@ -158,6 +166,11 @@ func (s *Store) DeleteBackupCodes(ctx context.Context, subject string) error {
 	return s.rdb.Del(ctx, backupPrefix+subject).Err()
 }
 
+// DeleteSubject atomically removes a subject's credential and backup codes.
+func (s *Store) DeleteSubject(ctx context.Context, subject string) error {
+	return s.rdb.Del(ctx, credPrefix+subject, backupPrefix+subject).Err()
+}
+
 // SaveEnrollment saves a temporary enrollment; TTL is applied.
 func (s *Store) SaveEnrollment(ctx context.Context, e *Enrollment) error {
 	data, err := json.Marshal(e)
@@ -190,6 +203,59 @@ func (s *Store) DeleteEnrollment(ctx context.Context, enrollID string) error {
 	return s.rdb.Del(ctx, enrollPrefix+enrollID).Err()
 }
 
+// ConfirmEnrollment atomically persists the credential and backup codes and
+// consumes the temporary enrollment. It returns false when another request has
+// already consumed or replaced the enrollment.
+func (s *Store) ConfirmEnrollment(ctx context.Context, enrollment *Enrollment, credential *Credential, entries []BackupCodeEntry) (bool, error) {
+	credentialData, err := json.Marshal(credential)
+	if err != nil {
+		return false, err
+	}
+	backupData, err := json.Marshal(entries)
+	if err != nil {
+		return false, err
+	}
+
+	enrollmentKey := enrollPrefix + enrollment.EnrollID
+	credentialKey := credPrefix + credential.Subject
+	backupKey := backupPrefix + credential.Subject
+	for range transactionRetries {
+		confirmed := false
+		err := s.rdb.Watch(ctx, func(tx *redis.Tx) error {
+			data, err := tx.Get(ctx, enrollmentKey).Bytes()
+			if err == redis.Nil {
+				return nil
+			}
+			if err != nil {
+				return err
+			}
+			var current Enrollment
+			if err := json.Unmarshal(data, &current); err != nil {
+				return err
+			}
+			if current.EnrollID != enrollment.EnrollID || current.Subject != enrollment.Subject || current.SecretEnc != enrollment.SecretEnc {
+				return nil
+			}
+
+			_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+				pipe.Set(ctx, credentialKey, credentialData, s.credTTL)
+				pipe.Set(ctx, backupKey, backupData, 0)
+				pipe.Del(ctx, enrollmentKey)
+				return nil
+			})
+			if err == nil {
+				confirmed = true
+			}
+			return err
+		}, enrollmentKey)
+		if err == redis.TxFailedErr {
+			continue
+		}
+		return confirmed, err
+	}
+	return false, redis.TxFailedErr
+}
+
 // MarkChallengeUsed records that a challenge_id was used (for replay protection).
 func (s *Store) MarkChallengeUsed(ctx context.Context, challengeID string) error {
 	key := chUsedPrefix + challengeID
@@ -214,28 +280,16 @@ func (s *Store) IsChallengeUsed(ctx context.Context, challengeID string) (bool, 
 
 // IncrRateSubject increments subject rate counter; returns new count.
 func (s *Store) IncrRateSubject(ctx context.Context, subject string) (int64, error) {
-	key := rateSubjectPrefix + subject
-	pipe := s.rdb.Pipeline()
-	incr := pipe.Incr(ctx, key)
-	pipe.Expire(ctx, key, s.rateSubTTL)
-	_, err := pipe.Exec(ctx)
-	if err != nil {
-		return 0, err
-	}
-	return incr.Val(), nil
+	return s.incrementRate(ctx, rateSubjectPrefix+subject, s.rateSubTTL)
 }
 
 // IncrRateIP increments IP rate counter; returns new count.
 func (s *Store) IncrRateIP(ctx context.Context, ip string) (int64, error) {
-	key := rateIPPrefix + ip
-	pipe := s.rdb.Pipeline()
-	incr := pipe.Incr(ctx, key)
-	pipe.Expire(ctx, key, s.rateIPTTL)
-	_, err := pipe.Exec(ctx)
-	if err != nil {
-		return 0, err
-	}
-	return incr.Val(), nil
+	return s.incrementRate(ctx, rateIPPrefix+ip, s.rateIPTTL)
+}
+
+func (s *Store) incrementRate(ctx context.Context, key string, ttl time.Duration) (int64, error) {
+	return incrementRateScript.Run(ctx, s.rdb, []string{key}, ttl.Milliseconds()).Int64()
 }
 
 // SaveBackupCodes stores backup code hashes for a subject (JSON array).

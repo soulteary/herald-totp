@@ -24,8 +24,8 @@
 | HMAC_SECRET | | Optional; HMAC auth. |
 | HERALD_TOTP_HMAC_KEYS | | Optional; JSON map for key rotation. |
 | SERVICE_NAME | herald-totp | Service name (e.g. for HMAC). |
-| RATE_LIMIT_PER_SUBJECT | 20 | Max requests per subject per hour. |
-| RATE_LIMIT_PER_IP | 30 | Max requests per IP per minute. |
+| RATE_LIMIT_PER_SUBJECT | 20 | Max requests per subject in a fixed one-hour window starting with the first request. |
+| RATE_LIMIT_PER_IP | 30 | Max requests per IP in a fixed one-minute window starting with the first request. |
 
 ## Run
 

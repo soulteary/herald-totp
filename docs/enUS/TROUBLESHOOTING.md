@@ -81,7 +81,7 @@ herald-totp has `API_KEY` (or HMAC) set, but the request either does not send th
 
 ### Causes and Solutions
 
-- **expired**: The enroll_id from `POST /v1/enroll/start` has expired (default TTL 10m). The user must start enrollment again: call enroll/start and have the user scan the new QR code, then submit the new code to enroll/confirm.
+- **expired**: The enroll_id from `POST /v1/enroll/start` has expired, was already confirmed, or is otherwise no longer available (default TTL 10m). The user must start enrollment again: call enroll/start and have the user scan the new QR code, then submit the new code to enroll/confirm.
 - **invalid**: The 6-digit TOTP code submitted does not match the current TOTP for the temporary secret. Ensure the user’s authenticator app time is in sync and they enter the current code. Check that TOTP period (default 30s) and skew are consistent.
 
 ---
