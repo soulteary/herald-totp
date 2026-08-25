@@ -3,13 +3,13 @@ package router
 import (
 	"time"
 
-	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/cors"
-	"github.com/gofiber/fiber/v2/middleware/recover"
-	health "github.com/soulteary/health-kit"
-	logger "github.com/soulteary/logger-kit"
-	metricskit "github.com/soulteary/metrics-kit"
-	middlewarekit "github.com/soulteary/middleware-kit"
+	"github.com/gofiber/fiber/v3"
+	"github.com/gofiber/fiber/v3/middleware/cors"
+	"github.com/gofiber/fiber/v3/middleware/recover"
+	health "github.com/soulteary/health-kit/v2"
+	logger "github.com/soulteary/logger-kit/v2"
+	metricskit "github.com/soulteary/metrics-kit/v2"
+	middlewarekit "github.com/soulteary/middleware-kit/v2"
 	rediskit "github.com/soulteary/redis-kit/client"
 
 	"github.com/soulteary/herald-totp/internal/config"
@@ -43,9 +43,9 @@ func Setup(app *fiber.App, log *logger.Logger) (*store.Store, error) {
 		IncludeLatency:   true,
 	}))
 	app.Use(cors.New(cors.Config{
-		AllowOrigins: "*",
-		AllowMethods: "GET,POST,OPTIONS",
-		AllowHeaders: "Content-Type,Authorization,X-Service,X-Signature,X-Timestamp,X-API-Key,X-Key-Id",
+		AllowOrigins: []string{"*"},
+		AllowMethods: []string{"GET", "POST", "OPTIONS"},
+		AllowHeaders: []string{"Content-Type", "Authorization", "X-Service", "X-Signature", "X-Timestamp", "X-API-Key", "X-Key-Id"},
 	}))
 
 	healthConfig := health.DefaultConfig().WithServiceName(config.ServiceName)

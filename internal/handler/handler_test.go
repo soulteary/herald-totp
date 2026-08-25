@@ -11,10 +11,10 @@ import (
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 	pqtotp "github.com/pquerna/otp/totp"
 	"github.com/redis/go-redis/v9"
-	logger "github.com/soulteary/logger-kit"
+	logger "github.com/soulteary/logger-kit/v2"
 
 	"github.com/soulteary/herald-totp/internal/config"
 	"github.com/soulteary/herald-totp/internal/secret"
@@ -293,7 +293,7 @@ func TestEnrollStart_RedisError(t *testing.T) {
 	app.Post("/enroll/start", EnrollStart(st, log))
 	req := httptest.NewRequest(http.MethodPost, "/enroll/start", bytes.NewReader([]byte(`{"subject":"redis-error"}`)))
 	req.Header.Set("Content-Type", "application/json")
-	resp, err := app.Test(req, 5_000)
+	resp, err := app.Test(req, fiber.TestConfig{Timeout: 5 * time.Second})
 	if err != nil {
 		t.Fatalf("app.Test: %v", err)
 	}
@@ -737,7 +737,7 @@ func TestRevoke_RedisError(t *testing.T) {
 	app.Post("/revoke", Revoke(st))
 	req := httptest.NewRequest(http.MethodPost, "/revoke", bytes.NewReader([]byte(`{"subject":"redis-error"}`)))
 	req.Header.Set("Content-Type", "application/json")
-	resp, err := app.Test(req, 5_000)
+	resp, err := app.Test(req, fiber.TestConfig{Timeout: 5 * time.Second})
 	if err != nil {
 		t.Fatalf("app.Test: %v", err)
 	}
@@ -795,7 +795,7 @@ func TestEnrollConfirm_RedisError(t *testing.T) {
 	app.Post("/enroll/confirm", EnrollConfirm(st, log))
 	req := httptest.NewRequest(http.MethodPost, "/enroll/confirm", bytes.NewBufferString(`{"enroll_id":"e_redis","code":"123456"}`))
 	req.Header.Set("Content-Type", "application/json")
-	resp, err := app.Test(req, 5_000)
+	resp, err := app.Test(req, fiber.TestConfig{Timeout: 5 * time.Second})
 	if err != nil {
 		t.Fatalf("app.Test: %v", err)
 	}
@@ -873,7 +873,7 @@ func TestStatus_RedisError(t *testing.T) {
 	app := fiber.New()
 	app.Get("/status", Status(st))
 
-	resp, err := app.Test(httptest.NewRequest(http.MethodGet, "/status?subject=user", nil), 5_000)
+	resp, err := app.Test(httptest.NewRequest(http.MethodGet, "/status?subject=user", nil), fiber.TestConfig{Timeout: 5 * time.Second})
 	if err != nil {
 		t.Fatalf("app.Test: %v", err)
 	}
@@ -908,7 +908,7 @@ func TestVerify_ErrorBranches(t *testing.T) {
 			app.Post("/verify", Verify(st, log))
 			req := httptest.NewRequest(http.MethodPost, "/verify", bytes.NewBufferString(tt.body))
 			req.Header.Set("Content-Type", "application/json")
-			resp, err := app.Test(req, 5_000)
+			resp, err := app.Test(req, fiber.TestConfig{Timeout: 5 * time.Second})
 			if err != nil {
 				t.Fatalf("app.Test: %v", err)
 			}

@@ -1,7 +1,7 @@
 package handler
 
 import (
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 
 	"github.com/soulteary/herald-totp/internal/store"
 )
@@ -14,7 +14,7 @@ type StatusResponse struct {
 
 // Status handles GET /v1/status?subject=xxx.
 func Status(st *store.Store) fiber.Handler {
-	return func(c *fiber.Ctx) error {
+	return func(c fiber.Ctx) error {
 		subject := c.Query("subject")
 		if subject == "" {
 			return respondBadRequest(c, "invalid_request", "subject is required")

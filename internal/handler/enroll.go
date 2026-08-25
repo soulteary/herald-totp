@@ -4,8 +4,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gofiber/fiber/v2"
-	logger "github.com/soulteary/logger-kit"
+	"github.com/gofiber/fiber/v3"
+	logger "github.com/soulteary/logger-kit/v2"
 	secure "github.com/soulteary/secure-kit"
 
 	"github.com/soulteary/herald-totp/internal/config"
@@ -43,9 +43,9 @@ type EnrollConfirmResponse struct {
 
 // EnrollStart handles POST /v1/enroll/start.
 func EnrollStart(st *store.Store, log *logger.Logger) fiber.Handler {
-	return func(c *fiber.Ctx) error {
+	return func(c fiber.Ctx) error {
 		var req EnrollStartRequest
-		if err := c.BodyParser(&req); err != nil {
+		if err := c.Bind().Body(&req); err != nil {
 			return respondBadRequest(c, "invalid_request", err.Error())
 		}
 		if req.Subject == "" {
@@ -118,9 +118,9 @@ func EnrollStart(st *store.Store, log *logger.Logger) fiber.Handler {
 
 // EnrollConfirm handles POST /v1/enroll/confirm.
 func EnrollConfirm(st *store.Store, log *logger.Logger) fiber.Handler {
-	return func(c *fiber.Ctx) error {
+	return func(c fiber.Ctx) error {
 		var req EnrollConfirmRequest
-		if err := c.BodyParser(&req); err != nil {
+		if err := c.Bind().Body(&req); err != nil {
 			return respondBadRequest(c, "invalid_request", err.Error())
 		}
 		if req.EnrollID == "" || req.Code == "" {

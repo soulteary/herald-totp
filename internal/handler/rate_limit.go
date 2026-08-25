@@ -1,13 +1,13 @@
 package handler
 
 import (
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 
 	"github.com/soulteary/herald-totp/internal/config"
 	"github.com/soulteary/herald-totp/internal/store"
 )
 
-func rateLimitExceeded(c *fiber.Ctx, st *store.Store, subject string) (bool, error) {
+func rateLimitExceeded(c fiber.Ctx, st *store.Store, subject string) (bool, error) {
 	subjectCount, err := st.IncrRateSubject(c.Context(), subject)
 	if err != nil {
 		return false, err

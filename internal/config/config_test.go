@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	logger "github.com/soulteary/logger-kit"
+	logger "github.com/soulteary/logger-kit/v2"
 )
 
 func TestInitialize(t *testing.T) {

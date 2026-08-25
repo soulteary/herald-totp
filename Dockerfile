@@ -12,7 +12,7 @@ ARG VERSION=dev
 ARG COMMIT=unknown
 ARG BUILD_DATE
 RUN BUILD_DATE=${BUILD_DATE:-$(date +%FT%T%z)} && \
-    go build -ldflags "-w -s -X 'github.com/soulteary/version-kit.Version=$VERSION' -X 'github.com/soulteary/version-kit.Commit=$COMMIT' -X 'github.com/soulteary/version-kit.BuildDate=$BUILD_DATE'" -o herald-totp .
+    go build -ldflags "-w -s -X 'github.com/soulteary/version-kit/v2.Version=$VERSION' -X 'github.com/soulteary/version-kit/v2.Commit=$COMMIT' -X 'github.com/soulteary/version-kit/v2.BuildDate=$BUILD_DATE'" -o herald-totp .
 
 # Runtime stage
 FROM alpine:3.23
