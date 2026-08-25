@@ -2,6 +2,8 @@ package store
 
 import (
 	"context"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -46,6 +48,70 @@ func TestSaveGetCredential(t *testing.T) {
 	got, _ = st.GetCredential(ctx, "nonexistent")
 	if got != nil {
 		t.Errorf("GetCredential(nonexistent) = %v, want nil", got)
+	}
+}
+
+func TestClaimCredentialStep(t *testing.T) {
+	st, mr := newTestStore(t)
+	defer mr.Close()
+	ctx := context.Background()
+	cred := &Credential{
+		Subject: "claim-user", SecretEnc: "enc", Period: 30, Digits: 6,
+		Enabled: true, LastUsedStep: 100, CreatedAt: 1, UpdatedAt: 1,
+	}
+	if err := st.SaveCredential(ctx, cred); err != nil {
+		t.Fatalf("SaveCredential: %v", err)
+	}
+
+	claimed, err := st.ClaimCredentialStep(ctx, cred.Subject, 101, 2)
+	if err != nil || !claimed {
+		t.Fatalf("ClaimCredentialStep = (%v, %v), want true", claimed, err)
+	}
+	claimed, err = st.ClaimCredentialStep(ctx, cred.Subject, 101, 3)
+	if err != nil || claimed {
+		t.Fatalf("repeated ClaimCredentialStep = (%v, %v), want false", claimed, err)
+	}
+	stored, err := st.GetCredential(ctx, cred.Subject)
+	if err != nil || stored.LastUsedStep != 101 || stored.UpdatedAt != 2 {
+		t.Fatalf("stored credential = (%+v, %v)", stored, err)
+	}
+	if claimed, err := st.ClaimCredentialStep(ctx, "missing", 1, 1); err != redis.Nil || claimed {
+		t.Fatalf("missing credential claim = (%v, %v), want redis.Nil", claimed, err)
+	}
+}
+
+func TestClaimCredentialStep_Concurrent(t *testing.T) {
+	st, mr := newTestStore(t)
+	defer mr.Close()
+	ctx := context.Background()
+	cred := &Credential{Subject: "concurrent-user", SecretEnc: "enc", Period: 30, Digits: 6, Enabled: true}
+	if err := st.SaveCredential(ctx, cred); err != nil {
+		t.Fatalf("SaveCredential: %v", err)
+	}
+
+	const workers = 16
+	start := make(chan struct{})
+	var successes atomic.Int32
+	var wg sync.WaitGroup
+	for range workers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			claimed, err := st.ClaimCredentialStep(ctx, cred.Subject, 500, 10)
+			if err != nil {
+				t.Errorf("ClaimCredentialStep: %v", err)
+				return
+			}
+			if claimed {
+				successes.Add(1)
+			}
+		}()
+	}
+	close(start)
+	wg.Wait()
+	if got := successes.Load(); got != 1 {
+		t.Fatalf("successful claims = %d, want 1", got)
 	}
 }
 
@@ -117,6 +183,20 @@ func TestMarkChallengeUsed_IsChallengeUsed(t *testing.T) {
 	}
 }
 
+func TestClaimChallenge(t *testing.T) {
+	st, mr := newTestStore(t)
+	defer mr.Close()
+	ctx := context.Background()
+	claimed, err := st.ClaimChallenge(ctx, "c_once")
+	if err != nil || !claimed {
+		t.Fatalf("first ClaimChallenge = (%v, %v), want true", claimed, err)
+	}
+	claimed, err = st.ClaimChallenge(ctx, "c_once")
+	if err != nil || claimed {
+		t.Fatalf("second ClaimChallenge = (%v, %v), want false", claimed, err)
+	}
+}
+
 func TestIncrRateSubject_IncrRateIP(t *testing.T) {
 	st, mr := newTestStore(t)
 	defer mr.Close()
@@ -184,6 +264,40 @@ func TestSaveGetBackupCodes_ConsumeBackupCode(t *testing.T) {
 	consumed, _ = st.ConsumeBackupCode(ctx, "nobody", "hash1")
 	if consumed {
 		t.Error("ConsumeBackupCode(nobody) = true, want false")
+	}
+}
+
+func TestConsumeBackupCode_Concurrent(t *testing.T) {
+	st, mr := newTestStore(t)
+	defer mr.Close()
+	ctx := context.Background()
+	if err := st.SaveBackupCodes(ctx, "concurrent-user", []BackupCodeEntry{{CodeHash: "hash-once"}}); err != nil {
+		t.Fatalf("SaveBackupCodes: %v", err)
+	}
+
+	const workers = 16
+	start := make(chan struct{})
+	var successes atomic.Int32
+	var wg sync.WaitGroup
+	for range workers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			consumed, err := st.ConsumeBackupCode(ctx, "concurrent-user", "hash-once")
+			if err != nil {
+				t.Errorf("ConsumeBackupCode: %v", err)
+				return
+			}
+			if consumed {
+				successes.Add(1)
+			}
+		}()
+	}
+	close(start)
+	wg.Wait()
+	if got := successes.Load(); got != 1 {
+		t.Fatalf("successful consumptions = %d, want 1", got)
 	}
 }
 

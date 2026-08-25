@@ -102,6 +102,11 @@ Verify a TOTP code (or backup code) for login.
 | code        | string | Yes      | 6-digit TOTP or backup code (e.g. ABCD-EFGH). |
 | challenge_id| string | No       | Optional; for replay/audit (one-time use). |
 
+The service records the exact TOTP time step matched within `TOTP_SKEW` and
+claims it atomically in Redis. A code accepted from an adjacent skew window
+therefore cannot be reused after the server enters that time step. Backup codes
+and non-empty `challenge_id` values are also consumed atomically.
+
 **Response (200):**
 ```json
 {

@@ -17,7 +17,7 @@ herald-totp 是 Herald/Stargate 栈的 TOTP 双因素认证服务：**绑定（e
 - **解绑**：`POST /v1/revoke` 移除该用户的 TOTP 凭证与恢复码。
 - **状态**：`GET /v1/status?subject=...` 查询用户是否已开启 TOTP。
 - **恢复码**：确认绑定后返回 10 个一次性码，设备丢失时可用来验证。
-- **安全**：加密存储密钥（AES-GCM）、限流、时间步防重放、API Key 或 HMAC 鉴权。
+- **安全**：加密存储密钥（AES-GCM）、限流、原子化一次性消费 TOTP 时间步、恢复码和 challenge ID，以及 API Key 或 HMAC 鉴权。
 - **优雅关闭**：收到 `SIGINT` 或 `SIGTERM` 后停止接收新请求，在 10 秒超时内完成关闭。
 
 ## 架构

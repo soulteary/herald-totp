@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/pquerna/otp"
+	"github.com/pquerna/otp/hotp"
 	"github.com/pquerna/otp/totp"
 )
 
@@ -55,12 +56,41 @@ func Generate(accountName string, cfg Config) (secretBase32, otpauthURI string, 
 
 // Validate verifies the code against the secret at the given time.
 func Validate(code, secretBase32 string, cfg Config, now time.Time) (bool, error) {
-	return totp.ValidateCustom(code, secretBase32, now, totp.ValidateOpts{
-		Period:    cfg.Period,
-		Skew:      cfg.Skew,
-		Digits:    cfg.Digits,
-		Algorithm: cfg.Algo,
-	})
+	valid, _, err := ValidateWithStep(code, secretBase32, cfg, now)
+	return valid, err
+}
+
+// ValidateWithStep verifies the code and returns the exact counter that
+// matched. Callers use the matched counter, rather than the server's current
+// counter, when enforcing one-time use across the configured skew window.
+func ValidateWithStep(code, secretBase32 string, cfg Config, now time.Time) (bool, int64, error) {
+	period := cfg.Period
+	if period == 0 {
+		period = 30
+	}
+	current := TimeStep(now, period)
+	counters := make([]int64, 0, 1+2*int(cfg.Skew))
+	counters = append(counters, current)
+	for offset := int64(1); offset <= int64(cfg.Skew); offset++ {
+		counters = append(counters, current+offset)
+		if current >= offset {
+			counters = append(counters, current-offset)
+		}
+	}
+
+	for _, counter := range counters {
+		valid, err := hotp.ValidateCustom(code, uint64(counter), secretBase32, hotp.ValidateOpts{
+			Digits:    cfg.Digits,
+			Algorithm: cfg.Algo,
+		})
+		if err != nil {
+			return false, 0, err
+		}
+		if valid {
+			return true, counter, nil
+		}
+	}
+	return false, 0, nil
 }
 
 // TimeStep returns the current time step (Unix / period) for replay check.
