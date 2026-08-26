@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"strings"
 	"time"
 
@@ -102,6 +103,12 @@ func EnrollStart(st *store.Store, log *logger.Logger) fiber.Handler {
 			CreatedAt: now.Unix(),
 		}
 		if err := st.SaveEnrollment(c.Context(), e); err != nil {
+			if errors.Is(err, store.ErrCredentialExists) {
+				return respondConflict(c, "already_enrolled", "subject already has a TOTP credential")
+			}
+			if errors.Is(err, store.ErrEnrollmentInProgress) {
+				return respondConflict(c, "enrollment_in_progress", "subject already has an active enrollment")
+			}
 			log.Warn().Err(err).Msg("enroll start: save failed")
 			return respondInternalError(c)
 		}
@@ -158,14 +165,14 @@ func EnrollConfirm(st *store.Store, log *logger.Logger) fiber.Handler {
 
 		now := time.Now()
 		cred := &store.Credential{
-			Subject:      e.Subject,
-			SecretEnc:    e.SecretEnc,
-			Issuer:       e.Issuer,
-			Label:        e.Label,
-			Period:       e.Period,
-			Digits:       e.Digits,
-			Algo:         "SHA1",
-			Enabled:      true,
+			Subject:   e.Subject,
+			SecretEnc: e.SecretEnc,
+			Issuer:    e.Issuer,
+			Label:     e.Label,
+			Period:    e.Period,
+			Digits:    e.Digits,
+			Algo:      "SHA1",
+			Enabled:   true,
 			// The code used to confirm enrollment is itself a consumed TOTP
 			// value. Persist its matched counter so it cannot be reused for an
 			// immediate verification request in the same time window.
@@ -181,6 +188,10 @@ func EnrollConfirm(st *store.Store, log *logger.Logger) fiber.Handler {
 		}
 		confirmed, err := st.ConfirmEnrollment(c.Context(), e, cred, entries)
 		if err != nil {
+			if errors.Is(err, store.ErrCredentialExists) {
+				metrics.RecordEnrollConfirm("failure")
+				return respondConflict(c, "already_enrolled", "subject already has a TOTP credential")
+			}
 			log.Warn().Err(err).Msg("enroll confirm: commit failed")
 			metrics.RecordEnrollConfirm("failure")
 			return respondInternalError(c)

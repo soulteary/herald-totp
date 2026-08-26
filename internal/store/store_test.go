@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -142,6 +143,76 @@ func TestSaveGetEnrollment(t *testing.T) {
 	got, _ = st.GetEnrollment(ctx, "e_abc")
 	if got != nil {
 		t.Errorf("GetEnrollment after Delete = %v, want nil", got)
+	}
+}
+
+func TestSaveEnrollment_RejectsCredentialAndConcurrentEnrollment(t *testing.T) {
+	st, mr := newTestStore(t)
+	defer mr.Close()
+	ctx := context.Background()
+
+	first := &Enrollment{EnrollID: "e_first", Subject: "same-user", SecretEnc: "enc1"}
+	if err := st.SaveEnrollment(ctx, first); err != nil {
+		t.Fatalf("SaveEnrollment(first): %v", err)
+	}
+	second := &Enrollment{EnrollID: "e_second", Subject: "same-user", SecretEnc: "enc2"}
+	if err := st.SaveEnrollment(ctx, second); !errors.Is(err, ErrEnrollmentInProgress) {
+		t.Fatalf("SaveEnrollment(second) error = %v, want ErrEnrollmentInProgress", err)
+	}
+
+	credential := &Credential{Subject: "enrolled-user", SecretEnc: "existing", Enabled: true}
+	if err := st.SaveCredential(ctx, credential); err != nil {
+		t.Fatalf("SaveCredential: %v", err)
+	}
+	if err := st.SaveEnrollment(ctx, &Enrollment{EnrollID: "e_existing", Subject: credential.Subject}); !errors.Is(err, ErrCredentialExists) {
+		t.Fatalf("SaveEnrollment(existing) error = %v, want ErrCredentialExists", err)
+	}
+}
+
+func TestConfirmEnrollment_DoesNotOverwriteCredential(t *testing.T) {
+	st, mr := newTestStore(t)
+	defer mr.Close()
+	ctx := context.Background()
+	enrollment := &Enrollment{EnrollID: "e_no_overwrite", Subject: "protected-user", SecretEnc: "new-secret"}
+	if err := st.SaveEnrollment(ctx, enrollment); err != nil {
+		t.Fatalf("SaveEnrollment: %v", err)
+	}
+	existing := &Credential{Subject: enrollment.Subject, SecretEnc: "existing-secret", Enabled: true}
+	if err := st.SaveCredential(ctx, existing); err != nil {
+		t.Fatalf("SaveCredential: %v", err)
+	}
+
+	confirmed, err := st.ConfirmEnrollment(ctx, enrollment, &Credential{
+		Subject: enrollment.Subject, SecretEnc: enrollment.SecretEnc, Enabled: true,
+	}, nil)
+	if confirmed || !errors.Is(err, ErrCredentialExists) {
+		t.Fatalf("ConfirmEnrollment = (%v, %v), want false, ErrCredentialExists", confirmed, err)
+	}
+	got, err := st.GetCredential(ctx, enrollment.Subject)
+	if err != nil || got == nil || got.SecretEnc != existing.SecretEnc {
+		t.Fatalf("credential after conflict = (%+v, %v)", got, err)
+	}
+	if pending, err := st.GetEnrollment(ctx, enrollment.EnrollID); err != nil || pending != nil {
+		t.Fatalf("conflicting enrollment was not consumed: (%+v, %v)", pending, err)
+	}
+}
+
+func TestDeleteSubject_InvalidatesPendingEnrollment(t *testing.T) {
+	st, mr := newTestStore(t)
+	defer mr.Close()
+	ctx := context.Background()
+	enrollment := &Enrollment{EnrollID: "e_revoke_pending", Subject: "revoke-pending", SecretEnc: "secret"}
+	if err := st.SaveEnrollment(ctx, enrollment); err != nil {
+		t.Fatalf("SaveEnrollment: %v", err)
+	}
+	if err := st.DeleteSubject(ctx, enrollment.Subject); err != nil {
+		t.Fatalf("DeleteSubject: %v", err)
+	}
+	if got, err := st.GetEnrollment(ctx, enrollment.EnrollID); err != nil || got != nil {
+		t.Fatalf("pending enrollment after DeleteSubject = (%+v, %v)", got, err)
+	}
+	if err := st.SaveEnrollment(ctx, &Enrollment{EnrollID: "e_after_revoke", Subject: enrollment.Subject}); err != nil {
+		t.Fatalf("new enrollment after DeleteSubject: %v", err)
 	}
 }
 
