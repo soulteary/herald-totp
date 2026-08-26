@@ -21,6 +21,12 @@ func respondRateLimited(c fiber.Ctx) error {
 	return c.Status(fiber.StatusTooManyRequests).JSON(ErrorResponse{OK: false, Reason: "rate_limited"})
 }
 
+// respondConflict sends 409 when the requested state transition conflicts
+// with an existing credential or enrollment.
+func respondConflict(c fiber.Ctx, reason, message string) error {
+	return c.Status(fiber.StatusConflict).JSON(ErrorResponse{OK: false, Reason: reason, Message: message})
+}
+
 // respondInternalError sends 500 with internal_error reason.
 func respondInternalError(c fiber.Ctx) error {
 	return c.Status(fiber.StatusInternalServerError).JSON(ErrorResponse{OK: false, Reason: "internal_error"})

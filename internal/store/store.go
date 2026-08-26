@@ -4,19 +4,30 @@ import (
 	"context"
 	"crypto/subtle"
 	"encoding/json"
+	"errors"
 	"time"
 
 	"github.com/redis/go-redis/v9"
 )
 
 const (
-	credPrefix         = "totp:cred:"
-	enrollPrefix       = "totp:enroll:"
-	backupPrefix       = "totp:backup:"
-	chUsedPrefix       = "totp:ch_used:"
-	rateSubjectPrefix  = "totp:rate:subject:"
-	rateIPPrefix       = "totp:rate:ip:"
-	transactionRetries = 16
+	credPrefix          = "totp:cred:"
+	enrollPrefix        = "totp:enroll:"
+	enrollSubjectPrefix = "totp:enroll_subject:"
+	backupPrefix        = "totp:backup:"
+	chUsedPrefix        = "totp:ch_used:"
+	rateSubjectPrefix   = "totp:rate:subject:"
+	rateIPPrefix        = "totp:rate:ip:"
+	transactionRetries  = 16
+)
+
+var (
+	// ErrCredentialExists is returned when enrollment would replace an
+	// existing credential.
+	ErrCredentialExists = errors.New("credential already exists")
+	// ErrEnrollmentInProgress is returned when a subject already has a live
+	// enrollment awaiting confirmation.
+	ErrEnrollmentInProgress = errors.New("enrollment already in progress")
 )
 
 var incrementRateScript = redis.NewScript(`
@@ -25,6 +36,26 @@ if count == 1 then
   redis.call("PEXPIRE", KEYS[1], ARGV[1])
 end
 return count
+`)
+
+var saveEnrollmentScript = redis.NewScript(`
+if redis.call("EXISTS", KEYS[2]) == 1 then
+  return 0
+end
+if redis.call("EXISTS", KEYS[3]) == 1 then
+  return -1
+end
+redis.call("SET", KEYS[1], ARGV[1], "PX", ARGV[2])
+redis.call("SET", KEYS[3], ARGV[3], "PX", ARGV[2])
+return 1
+`)
+
+var deleteSubjectScript = redis.NewScript(`
+local enrollID = redis.call("GET", KEYS[3])
+if enrollID then
+  redis.call("DEL", ARGV[1] .. enrollID)
+end
+return redis.call("DEL", KEYS[1], KEYS[2], KEYS[3])
 `)
 
 // Credential is the persisted TOTP credential for a subject.
@@ -168,7 +199,11 @@ func (s *Store) DeleteBackupCodes(ctx context.Context, subject string) error {
 
 // DeleteSubject atomically removes a subject's credential and backup codes.
 func (s *Store) DeleteSubject(ctx context.Context, subject string) error {
-	return s.rdb.Del(ctx, credPrefix+subject, backupPrefix+subject).Err()
+	return deleteSubjectScript.Run(ctx, s.rdb, []string{
+		credPrefix + subject,
+		backupPrefix + subject,
+		enrollSubjectPrefix + subject,
+	}, enrollPrefix).Err()
 }
 
 // SaveEnrollment saves a temporary enrollment; TTL is applied.
@@ -177,8 +212,22 @@ func (s *Store) SaveEnrollment(ctx context.Context, e *Enrollment) error {
 	if err != nil {
 		return err
 	}
-	key := enrollPrefix + e.EnrollID
-	return s.rdb.Set(ctx, key, data, s.enrollTTL).Err()
+	result, err := saveEnrollmentScript.Run(ctx, s.rdb, []string{
+		enrollPrefix + e.EnrollID,
+		credPrefix + e.Subject,
+		enrollSubjectPrefix + e.Subject,
+	}, data, s.enrollTTL.Milliseconds(), e.EnrollID).Int64()
+	if err != nil {
+		return err
+	}
+	switch result {
+	case 0:
+		return ErrCredentialExists
+	case -1:
+		return ErrEnrollmentInProgress
+	default:
+		return nil
+	}
 }
 
 // GetEnrollment returns the enrollment by enroll_id, or nil if not found/expired.
@@ -219,8 +268,10 @@ func (s *Store) ConfirmEnrollment(ctx context.Context, enrollment *Enrollment, c
 	enrollmentKey := enrollPrefix + enrollment.EnrollID
 	credentialKey := credPrefix + credential.Subject
 	backupKey := backupPrefix + credential.Subject
+	enrollmentSubjectKey := enrollSubjectPrefix + credential.Subject
 	for range transactionRetries {
 		confirmed := false
+		credentialExists := false
 		err := s.rdb.Watch(ctx, func(tx *redis.Tx) error {
 			data, err := tx.Get(ctx, enrollmentKey).Bytes()
 			if err == redis.Nil {
@@ -236,22 +287,47 @@ func (s *Store) ConfirmEnrollment(ctx context.Context, enrollment *Enrollment, c
 			if current.EnrollID != enrollment.EnrollID || current.Subject != enrollment.Subject || current.SecretEnc != enrollment.SecretEnc {
 				return nil
 			}
+			activeEnrollID, err := tx.Get(ctx, enrollmentSubjectKey).Result()
+			if err == redis.Nil || activeEnrollID != enrollment.EnrollID {
+				return nil
+			}
+			if err != nil {
+				return err
+			}
+			exists, err := tx.Exists(ctx, credentialKey).Result()
+			if err != nil {
+				return err
+			}
+			if exists > 0 {
+				_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+					pipe.Del(ctx, enrollmentKey, enrollmentSubjectKey)
+					return nil
+				})
+				credentialExists = err == nil
+				return err
+			}
 
 			_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 				pipe.Set(ctx, credentialKey, credentialData, s.credTTL)
 				pipe.Set(ctx, backupKey, backupData, 0)
-				pipe.Del(ctx, enrollmentKey)
+				pipe.Del(ctx, enrollmentKey, enrollmentSubjectKey)
 				return nil
 			})
 			if err == nil {
 				confirmed = true
 			}
 			return err
-		}, enrollmentKey)
+		}, enrollmentKey, enrollmentSubjectKey, credentialKey)
 		if err == redis.TxFailedErr {
 			continue
 		}
-		return confirmed, err
+		if err != nil {
+			return false, err
+		}
+		if credentialExists {
+			return false, ErrCredentialExists
+		}
+		return confirmed, nil
 	}
 	return false, redis.TxFailedErr
 }
