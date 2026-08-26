@@ -19,7 +19,8 @@ import (
 	"github.com/soulteary/herald-totp/internal/store"
 )
 
-// Setup creates the Fiber app and mounts routes. Call config.Initialize(log) before this.
+// Setup creates the Fiber app and mounts routes. Call config.Initialize(log)
+// and handle its validation error before this.
 func Setup(app *fiber.App, log *logger.Logger) (*store.Store, error) {
 	cfg := rediskit.DefaultConfig().
 		WithAddr(config.RedisAddr).

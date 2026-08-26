@@ -4,7 +4,7 @@
 
 ## 目录
 
-- [绑定或验证失败（config_error）](#绑定或验证失败config_error)
+- [服务因配置无效无法启动](#服务因配置无效无法启动)
 - [401 Unauthorized](#401-unauthorized)
 - [验证返回 invalid / expired / replay / rate_limited](#验证返回-invalid--expired--replay--rate_limited)
 - [绑定确认返回 expired 或 invalid](#绑定确认返回-expired-或-invalid)
@@ -13,21 +13,21 @@
 - [Redis 连接错误](#redis-连接错误)
 - [Stargate 无法访问 herald-totp](#stargate-无法访问-herald-totp)
 
-## 绑定或验证失败（config_error）
+## 服务因配置无效无法启动
 
 ### 现象
 
-- `POST /v1/enroll/start`、`POST /v1/enroll/confirm` 或 `POST /v1/verify` 返回 HTTP 500，提示加密密钥未配置或无效。
+- 进程在开始监听前退出，并在日志中输出 `invalid configuration` 及一个或多个无效环境变量。
 
 ### 原因
 
-启动时 herald-totp 会检查 `HERALD_TOTP_ENCRYPTION_KEY` 是否正好为 32 字节。长度不正确时，服务会打印警告，enroll/verify 将返回 config_error。
+启动时 herald-totp 会集中校验加密密钥、Redis、TOTP、TLS、绑定 TTL 和限流配置。无效配置会直接阻止启动，避免健康检查通过但核心接口不可用。
 
 ### 处理
 
 1. 将 `HERALD_TOTP_ENCRYPTION_KEY` 设置为正好 32 字节，可使用 `openssl rand -base64 24` 生成 32 字符的值。重启进程或容器。
 2. 确认运行时能读到该变量（环境变量名无拼写错误，Docker/K8s 传参正确）。
-3. 查看启动日志：若密钥缺失或过短，会打印 enroll/verify 将失败类警告。
+3. 查看完整的启动错误；多个无效配置会一次性汇总输出。
 
 ---
 

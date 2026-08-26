@@ -4,7 +4,7 @@ This guide helps you diagnose and resolve common issues with herald-totp.
 
 ## Table of Contents
 
-- [Enroll or Verify Fails (config_error)](#enroll-or-verify-fails-config_error)
+- [Service Fails to Start (invalid configuration)](#service-fails-to-start-invalid-configuration)
 - [401 Unauthorized](#401-unauthorized)
 - [Verify Returns invalid / expired / replay / rate_limited](#verify-returns-invalid--expired--replay--rate_limited)
 - [Enroll Confirm Returns expired or invalid](#enroll-confirm-returns-expired-or-invalid)
@@ -13,21 +13,21 @@ This guide helps you diagnose and resolve common issues with herald-totp.
 - [Redis Connection Errors](#redis-connection-errors)
 - [Stargate Cannot Reach herald-totp](#stargate-cannot-reach-herald-totp)
 
-## Enroll or Verify Fails (config_error)
+## Service Fails to Start (invalid configuration)
 
 ### Symptoms
 
-- `POST /v1/enroll/start`, `POST /v1/enroll/confirm`, or `POST /v1/verify` returns HTTP 500 with `reason` or message indicating encryption key not configured or invalid.
+- The process exits before listening and logs `invalid configuration` with one or more invalid environment variables.
 
 ### Cause
 
-At startup, herald-totp checks that `HERALD_TOTP_ENCRYPTION_KEY` is exactly 32 bytes. If its length is invalid, the service logs a warning and enroll/verify operations fail with config_error.
+At startup, herald-totp validates required encryption, Redis, TOTP, TLS, enrollment TTL, and rate-limit settings. Invalid values fail fast so health checks cannot report a partially usable service.
 
 ### Solutions
 
 1. Set `HERALD_TOTP_ENCRYPTION_KEY` to exactly 32 bytes. `openssl rand -base64 24` can generate a 32-character value. Restart the process or container.
 2. Confirm the variable is actually present in the runtime (no typo in env name; in Docker/Kubernetes it is passed correctly).
-3. Check logs at startup: if the key is missing or short, herald-totp logs that enroll/verify will fail.
+3. Check the complete startup error; multiple invalid values are reported together.
 
 ---
 

@@ -2,20 +2,53 @@ package config
 
 import (
 	"os"
+	"strings"
 	"testing"
+	"time"
 
 	logger "github.com/soulteary/logger-kit/v2"
 )
 
+func useValidConfig(t *testing.T) {
+	t.Helper()
+	oldPort, oldAddr, oldDB := Port, RedisAddr, RedisDB
+	oldTLSEnabled, oldTLSServerName := RedisTLSEnabled, RedisTLSServerName
+	oldTLSCAFile, oldTLSInsecure := RedisTLSCAFile, RedisTLSInsecureSkipVerify
+	oldIssuer, oldPeriod, oldDigits, oldSkew := TOTPIssuer, TOTPPeriod, TOTPDigits, TOTPSkew
+	oldEnrollTTL, oldEncryptionKey := EnrollTTL, EncryptionKey
+	oldSubjectLimit, oldIPLimit := RateLimitPerSubject, RateLimitPerIP
+	oldJSON, oldMap, oldSingle := HMACKeysJSON, hmacKeysMap, hmacSingleKeyID
+	Port, RedisAddr, RedisDB = ":8084", "localhost:6379", 0
+	RedisTLSEnabled, RedisTLSServerName = false, ""
+	RedisTLSCAFile, RedisTLSInsecureSkipVerify = "", false
+	TOTPIssuer, TOTPPeriod, TOTPDigits, TOTPSkew = "Herald", 30, 6, 1
+	EnrollTTL, EncryptionKey = 10*time.Minute, "0123456789abcdef0123456789abcdef"
+	RateLimitPerSubject, RateLimitPerIP = 20, 30
+	HMACKeysJSON, hmacKeysMap, hmacSingleKeyID = "", nil, ""
+	t.Cleanup(func() {
+		Port, RedisAddr, RedisDB = oldPort, oldAddr, oldDB
+		RedisTLSEnabled, RedisTLSServerName = oldTLSEnabled, oldTLSServerName
+		RedisTLSCAFile, RedisTLSInsecureSkipVerify = oldTLSCAFile, oldTLSInsecure
+		TOTPIssuer, TOTPPeriod, TOTPDigits, TOTPSkew = oldIssuer, oldPeriod, oldDigits, oldSkew
+		EnrollTTL, EncryptionKey = oldEnrollTTL, oldEncryptionKey
+		RateLimitPerSubject, RateLimitPerIP = oldSubjectLimit, oldIPLimit
+		HMACKeysJSON, hmacKeysMap, hmacSingleKeyID = oldJSON, oldMap, oldSingle
+	})
+}
+
 func TestInitialize(t *testing.T) {
+	useValidConfig(t)
 	l := logger.New(logger.Config{Level: logger.Disabled})
-	Initialize(l)
+	if err := Initialize(l); err != nil {
+		t.Fatalf("Initialize: %v", err)
+	}
 	if log != l {
 		t.Fatal("logger should be set")
 	}
 }
 
 func TestInitialize_HMACKeys(t *testing.T) {
+	useValidConfig(t)
 	oldJSON, oldSecret := HMACKeysJSON, HMACSecret
 	oldMap, oldSingle := hmacKeysMap, hmacSingleKeyID
 	defer func() {
@@ -27,7 +60,9 @@ func TestInitialize_HMACKeys(t *testing.T) {
 	HMACSecret = "legacy"
 	hmacKeysMap = nil
 	hmacSingleKeyID = ""
-	Initialize(logger.New(logger.Config{Level: logger.Disabled}))
+	if err := Initialize(logger.New(logger.Config{Level: logger.Disabled})); err != nil {
+		t.Fatalf("Initialize: %v", err)
+	}
 
 	if !HasHMACKeys() {
 		t.Fatal("HasHMACKeys = false, want true")
@@ -47,6 +82,7 @@ func TestInitialize_HMACKeys(t *testing.T) {
 }
 
 func TestInitialize_InvalidHMACKeys(t *testing.T) {
+	useValidConfig(t)
 	oldJSON, oldMap, oldSingle := HMACKeysJSON, hmacKeysMap, hmacSingleKeyID
 	defer func() {
 		HMACKeysJSON, hmacKeysMap, hmacSingleKeyID = oldJSON, oldMap, oldSingle
@@ -54,13 +90,16 @@ func TestInitialize_InvalidHMACKeys(t *testing.T) {
 	HMACKeysJSON = "{invalid"
 	hmacKeysMap = nil
 	hmacSingleKeyID = ""
-	Initialize(logger.New(logger.Config{Level: logger.Disabled}))
+	if err := Initialize(logger.New(logger.Config{Level: logger.Disabled})); err == nil {
+		t.Fatal("Initialize invalid HMAC JSON: expected error")
+	}
 	if HasHMACKeys() {
 		t.Fatal("invalid JSON should not configure HMAC keys")
 	}
 }
 
 func TestInitialize_SingleHMACKeyAllowsOmittedKeyID(t *testing.T) {
+	useValidConfig(t)
 	oldJSON, oldMap, oldSingle := HMACKeysJSON, hmacKeysMap, hmacSingleKeyID
 	defer func() {
 		HMACKeysJSON, hmacKeysMap, hmacSingleKeyID = oldJSON, oldMap, oldSingle
@@ -68,9 +107,63 @@ func TestInitialize_SingleHMACKeyAllowsOmittedKeyID(t *testing.T) {
 	HMACKeysJSON = `{"only":"secret"}`
 	hmacKeysMap = nil
 	hmacSingleKeyID = ""
-	Initialize(logger.New(logger.Config{Level: logger.Disabled}))
+	if err := Initialize(logger.New(logger.Config{Level: logger.Disabled})); err != nil {
+		t.Fatalf("Initialize: %v", err)
+	}
 	if got := GetHMACSecret(""); got != "secret" {
 		t.Fatalf("GetHMACSecret(without key ID) = %q, want single configured secret", got)
+	}
+}
+
+func TestValidate(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func()
+		want   string
+	}{
+		{name: "empty port", mutate: func() { Port = "" }, want: "PORT"},
+		{name: "empty Redis address", mutate: func() { RedisAddr = "" }, want: "REDIS_ADDR"},
+		{name: "negative Redis DB", mutate: func() { RedisDB = -1 }, want: "REDIS_DB"},
+		{name: "TLS options without TLS", mutate: func() { RedisTLSCAFile = "ca.pem" }, want: "REDIS_TLS_ENABLED"},
+		{name: "empty issuer", mutate: func() { TOTPIssuer = "" }, want: "TOTP_ISSUER"},
+		{name: "zero period", mutate: func() { TOTPPeriod = 0 }, want: "TOTP_PERIOD"},
+		{name: "large period", mutate: func() { TOTPPeriod = 301 }, want: "TOTP_PERIOD"},
+		{name: "invalid digits", mutate: func() { TOTPDigits = 7 }, want: "TOTP_DIGITS"},
+		{name: "large skew", mutate: func() { TOTPSkew = 11 }, want: "TOTP_SKEW"},
+		{name: "invalid enrollment TTL", mutate: func() { EnrollTTL = 0 }, want: "ENROLL_TTL"},
+		{name: "invalid encryption key", mutate: func() { EncryptionKey = "short" }, want: "HERALD_TOTP_ENCRYPTION_KEY"},
+		{name: "invalid subject limit", mutate: func() { RateLimitPerSubject = 0 }, want: "RATE_LIMIT_PER_SUBJECT"},
+		{name: "invalid IP limit", mutate: func() { RateLimitPerIP = 0 }, want: "RATE_LIMIT_PER_IP"},
+		{name: "empty HMAC map", mutate: func() { HMACKeysJSON = "{}"; hmacKeysMap = map[string]string{} }, want: "at least one key"},
+		{name: "empty HMAC key ID", mutate: func() { HMACKeysJSON = `{"":"secret"}`; hmacKeysMap = map[string]string{"": "secret"} }, want: "empty key ID"},
+		{name: "empty HMAC secret", mutate: func() { HMACKeysJSON = `{"key":""}`; hmacKeysMap = map[string]string{"key": ""} }, want: "empty secret"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			useValidConfig(t)
+			tt.mutate()
+			err := Validate()
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("Validate error = %v, want substring %q", err, tt.want)
+			}
+		})
+	}
+}
+
+func TestValidate_AggregatesProblems(t *testing.T) {
+	useValidConfig(t)
+	Port = ""
+	RedisAddr = ""
+	EncryptionKey = "short"
+	err := Validate()
+	if err == nil {
+		t.Fatal("Validate: expected error")
+	}
+	for _, want := range []string{"PORT", "REDIS_ADDR", "HERALD_TOTP_ENCRYPTION_KEY"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("Validate error %q does not contain %q", err, want)
+		}
 	}
 }
 
