@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"time"
 
@@ -53,25 +54,92 @@ var (
 	ExposeSecretInEnroll = ParseBoolEnv("EXPOSE_SECRET_IN_ENROLL", true)
 )
 
-// Initialize sets the logger and parses HMAC keys if present.
-func Initialize(l *logger.Logger) {
+// Initialize sets the logger, parses HMAC keys, and validates all service
+// configuration before external resources are initialized.
+func Initialize(l *logger.Logger) error {
 	log = l
+	hmacKeysMap = nil
+	hmacSingleKeyID = ""
 	if HMACKeysJSON != "" {
-		if err := parseHMACKeys(); err != nil {
-			log.Warn().Err(err).Msg("Failed to parse HERALD_TOTP_HMAC_KEYS")
-		} else {
-			hmacSingleKeyID = ""
-			if len(hmacKeysMap) == 1 {
-				for keyID := range hmacKeysMap {
-					hmacSingleKeyID = keyID
-				}
+		parsed, err := parseHMACKeys(HMACKeysJSON)
+		if err != nil {
+			return fmt.Errorf("parse HERALD_TOTP_HMAC_KEYS: %w", err)
+		}
+		hmacKeysMap = parsed
+		if len(hmacKeysMap) == 1 {
+			for keyID := range hmacKeysMap {
+				hmacSingleKeyID = keyID
 			}
 		}
 	}
+	return Validate()
 }
 
-func parseHMACKeys() error {
-	return json.Unmarshal([]byte(HMACKeysJSON), &hmacKeysMap)
+func parseHMACKeys(raw string) (map[string]string, error) {
+	keys := make(map[string]string)
+	if err := json.Unmarshal([]byte(raw), &keys); err != nil {
+		return nil, err
+	}
+	return keys, nil
+}
+
+// Validate checks configuration invariants that would otherwise make the
+// service unavailable, unsafe, or unexpectedly expensive at runtime.
+func Validate() error {
+	var problems []string
+	if strings.TrimSpace(Port) == "" || strings.TrimSpace(Port) == ":" {
+		problems = append(problems, "PORT must not be empty")
+	}
+	if strings.TrimSpace(RedisAddr) == "" {
+		problems = append(problems, "REDIS_ADDR must not be empty")
+	}
+	if RedisDB < 0 {
+		problems = append(problems, "REDIS_DB must be non-negative")
+	}
+	if !RedisTLSEnabled && (RedisTLSServerName != "" || RedisTLSCAFile != "" || RedisTLSInsecureSkipVerify) {
+		problems = append(problems, "Redis TLS options require REDIS_TLS_ENABLED=true")
+	}
+	if strings.TrimSpace(TOTPIssuer) == "" {
+		problems = append(problems, "TOTP_ISSUER must not be empty")
+	}
+	if TOTPPeriod <= 0 || TOTPPeriod > 300 {
+		problems = append(problems, "TOTP_PERIOD must be between 1 and 300 seconds")
+	}
+	if TOTPDigits != 6 && TOTPDigits != 8 {
+		problems = append(problems, "TOTP_DIGITS must be 6 or 8")
+	}
+	if TOTPSkew > 10 {
+		problems = append(problems, "TOTP_SKEW must not exceed 10 steps")
+	}
+	if EnrollTTL <= 0 {
+		problems = append(problems, "ENROLL_TTL must be positive")
+	}
+	if len(EncryptionKey) != 32 {
+		problems = append(problems, "HERALD_TOTP_ENCRYPTION_KEY must be exactly 32 bytes")
+	}
+	if RateLimitPerSubject <= 0 {
+		problems = append(problems, "RATE_LIMIT_PER_SUBJECT must be positive")
+	}
+	if RateLimitPerIP <= 0 {
+		problems = append(problems, "RATE_LIMIT_PER_IP must be positive")
+	}
+	if HMACKeysJSON != "" {
+		if len(hmacKeysMap) == 0 {
+			problems = append(problems, "HERALD_TOTP_HMAC_KEYS must contain at least one key")
+		}
+		for keyID, secret := range hmacKeysMap {
+			if strings.TrimSpace(keyID) == "" {
+				problems = append(problems, "HERALD_TOTP_HMAC_KEYS contains an empty key ID")
+			}
+			if secret == "" {
+				problems = append(problems, fmt.Sprintf("HERALD_TOTP_HMAC_KEYS key %q has an empty secret", keyID))
+			}
+		}
+	}
+	if len(problems) > 0 {
+		return fmt.Errorf("invalid configuration: %s", strings.Join(problems, "; "))
+	}
+	return nil
 }
 
 // ParseBoolEnv reads an env var as bool: "true"/"1"/"yes" (case-insensitive) = true, "false"/"0"/etc = false, empty = defaultVal.

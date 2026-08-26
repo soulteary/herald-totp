@@ -4,7 +4,7 @@
 
 ## 加密密钥
 
-- **HERALD_TOTP_ENCRYPTION_KEY** 为绑定与验证所必需，须为 32 字节（256 位）以用于 AES-256-GCM。未配置或长度不足时，enroll/confirm 与 verify 将失败（config_error）。
+- **HERALD_TOTP_ENCRYPTION_KEY** 为必填项，须正好为 32 字节（256 位）以用于 AES-256-GCM；密钥无效时服务会拒绝启动。
 - 请严格保密该密钥，不得提交到代码库。应通过环境变量或密钥管理服务（如 Kubernetes Secrets、HashiCorp Vault）注入。本地开发可使用 `.env`，并确保 `.env` 已加入 `.gitignore`。
 - 轮换密钥时需注意：Redis 中已加密的 TOTP 密钥无法用新密钥解密。若需轮换，请规划迁移（用户重新绑定或解密后重新加密）。
 

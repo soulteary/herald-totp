@@ -37,16 +37,14 @@ func main() {
 		ServiceName:    "herald-totp",
 		ServiceVersion: version.Version,
 	})
-	config.Initialize(log)
+	if err := config.Initialize(log); err != nil {
+		log.Fatal().Err(err).Msg("invalid configuration")
+	}
 
 	port := config.Port
 	if !strings.HasPrefix(port, ":") {
 		port = ":" + port
 	}
-	if len(config.EncryptionKey) != 32 {
-		log.Warn().Msg("HERALD_TOTP_ENCRYPTION_KEY must be exactly 32 bytes; enroll/verify will fail")
-	}
-
 	app := fiber.New()
 	st, err := router.Setup(app, log)
 	if err != nil {

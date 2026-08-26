@@ -4,7 +4,7 @@ This document describes security considerations and recommendations for herald-t
 
 ## Encryption Key
 
-- **HERALD_TOTP_ENCRYPTION_KEY** is required for enroll and verify. It must be exactly 32 bytes (256 bits) for AES-256-GCM. Without it, enroll/confirm and verify will fail (config_error).
+- **HERALD_TOTP_ENCRYPTION_KEY** is required and must be exactly 32 bytes (256 bits) for AES-256-GCM. The service refuses to start without a valid key.
 - Keep this key secret and never commit it to the repository. Use environment variables or a secret manager (e.g. Kubernetes Secrets, HashiCorp Vault). Use `.env` only for local development and ensure `.env` is in `.gitignore`.
 - Rotate the key with care: existing encrypted TOTP secrets in Redis will not decrypt with a new key. Plan migration (re-enroll users or decrypt/re-encrypt) if you rotate.
 
