@@ -9,8 +9,8 @@ import (
 	"io"
 )
 
-// ErrKeySize is returned when the encryption key is not 16, 24, or 32 bytes.
-var ErrKeySize = errors.New("encryption key must be 16, 24, or 32 bytes for AES")
+// ErrKeySize is returned when the configured AES-256 key is not exactly 32 bytes.
+var ErrKeySize = errors.New("encryption key must be exactly 32 bytes for AES-256")
 
 // Encrypt encrypts plaintext with AES-GCM using the given key. Key must be 16, 24, or 32 bytes.
 // Returns base64-encoded nonce+ciphertext.
@@ -63,22 +63,12 @@ func Decrypt(key []byte, encoded string) (string, error) {
 	return string(plaintext), nil
 }
 
-// KeyBytes returns the key as bytes, truncating or zero-padding to 32 bytes for AES-256.
-// If key is shorter than 32 bytes, it is zero-padded (not recommended for production).
+// KeyBytes returns a validated 32-byte AES-256 key. It deliberately rejects
+// shorter and longer values instead of silently padding or truncating them.
 func KeyBytes(key string) ([]byte, error) {
 	b := []byte(key)
-	switch len(b) {
-	case 16, 24, 32:
-		return b, nil
-	case 0:
+	if len(b) != 32 {
 		return nil, ErrKeySize
-	default:
-		if len(b) > 32 {
-			return b[:32], nil
-		}
-		// Pad to 32
-		padded := make([]byte, 32)
-		copy(padded, b)
-		return padded, nil
 	}
+	return b, nil
 }

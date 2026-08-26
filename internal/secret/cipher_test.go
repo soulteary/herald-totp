@@ -6,47 +6,20 @@ import (
 )
 
 func TestKeyBytes(t *testing.T) {
-	// 0 length -> ErrKeySize
-	_, err := KeyBytes("")
-	if err != ErrKeySize {
-		t.Errorf("KeyBytes(\"\") err = %v, want ErrKeySize", err)
-	}
-
-	// 16, 24, 32 bytes -> same slice
-	for _, n := range []int{16, 24, 32} {
+	for _, n := range []int{0, 10, 16, 24, 31, 33, 40} {
 		key := string(bytes.Repeat([]byte("x"), n))
-		b, err := KeyBytes(key)
-		if err != nil {
-			t.Errorf("KeyBytes(%d bytes): %v", n, err)
-		}
-		if len(b) != n {
-			t.Errorf("KeyBytes(%d bytes) len = %d", n, len(b))
+		if _, err := KeyBytes(key); err != ErrKeySize {
+			t.Errorf("KeyBytes(%d bytes) error = %v, want ErrKeySize", n, err)
 		}
 	}
 
-	// > 32 -> truncated to 32
-	long := string(bytes.Repeat([]byte("a"), 40))
-	b, err := KeyBytes(long)
+	key := string(bytes.Repeat([]byte("x"), 32))
+	b, err := KeyBytes(key)
 	if err != nil {
-		t.Fatalf("KeyBytes(40): %v", err)
+		t.Fatalf("KeyBytes(32): %v", err)
 	}
-	if len(b) != 32 {
-		t.Errorf("KeyBytes(40) len = %d, want 32", len(b))
-	}
-
-	// 10 bytes -> zero-padded to 32
-	short := "1234567890"
-	b, err = KeyBytes(short)
-	if err != nil {
-		t.Fatalf("KeyBytes(10): %v", err)
-	}
-	if len(b) != 32 {
-		t.Errorf("KeyBytes(10) len = %d, want 32", len(b))
-	}
-	padded := make([]byte, 32)
-	copy(padded, short)
-	if !bytes.Equal(b, padded) {
-		t.Error("KeyBytes(10) should be zero-padded to 32")
+	if string(b) != key {
+		t.Errorf("KeyBytes(32) = %q, want original key", string(b))
 	}
 }
 
@@ -111,11 +84,7 @@ func TestEncryptInvalidKey(t *testing.T) {
 		t.Error("Decrypt with invalid AES key should error")
 	}
 
-	// key length 1 is not 16/24/32, KeyBytes pads to 32 - so Encrypt gets 32 bytes
-	// Actually KeyBytes("x") returns 32-byte padded. So Encrypt will work.
-	// To get aes.NewCipher to fail we need key not 16/24/32. But KeyBytes always returns 16,24,32 or 32 padded.
-	// So we can't easily get aes.NewCipher to fail from our API. Skip that.
-	// Test Decrypt with wrong key (wrong plaintext after open)
+	// Decrypting with a different valid key must fail authentication.
 	keyGood := bytes.Repeat([]byte("a"), 32)
 	keyBad := bytes.Repeat([]byte("b"), 32)
 	enc, err := Encrypt(keyGood, "secret")

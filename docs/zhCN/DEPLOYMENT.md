@@ -30,7 +30,7 @@
 ## 运行
 
 ```bash
-export HERALD_TOTP_ENCRYPTION_KEY="your-32-byte-secret-key-here!!"
+export HERALD_TOTP_ENCRYPTION_KEY="$(openssl rand -base64 24)"
 go run .
 ```
 
@@ -59,6 +59,6 @@ go run .
 
 ## 安全
 
-- `HERALD_TOTP_ENCRYPTION_KEY` 需保密且不少于 32 字节。
+- `HERALD_TOTP_ENCRYPTION_KEY` 需保密且必须正好为 32 字节。
 - 服务间调用使用 API Key 或 HMAC。
 - herald-totp 部署在内网，不要直接暴露公网。

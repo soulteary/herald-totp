@@ -43,8 +43,8 @@ func main() {
 	if !strings.HasPrefix(port, ":") {
 		port = ":" + port
 	}
-	if config.EncryptionKey == "" || len(config.EncryptionKey) < 32 {
-		log.Warn().Msg("HERALD_TOTP_ENCRYPTION_KEY not set or shorter than 32 bytes; enroll/verify will fail")
+	if len(config.EncryptionKey) != 32 {
+		log.Warn().Msg("HERALD_TOTP_ENCRYPTION_KEY must be exactly 32 bytes; enroll/verify will fail")
 	}
 
 	app := fiber.New()

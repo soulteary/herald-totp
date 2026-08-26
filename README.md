@@ -100,7 +100,7 @@ With `HERALD_TOTP_ENCRYPTION_KEY` and Redis configured, enroll and verify will w
 ```bash
 docker build -t herald-totp .
 docker run -d --name herald-totp -p 8084:8084 \
-  -e HERALD_TOTP_ENCRYPTION_KEY="your-32-byte-encryption-key-here!!" \
+  -e HERALD_TOTP_ENCRYPTION_KEY="0123456789abcdef0123456789abcdef" \
   -e REDIS_ADDR=redis:6379 \
   herald-totp
 ```

@@ -21,11 +21,11 @@
 
 ### 原因
 
-启动时 herald-totp 会检查 `HERALD_TOTP_ENCRYPTION_KEY` 已设置且不少于 32 字节。若未设置或过短，服务会打印警告，enroll/verify 将返回 config_error。
+启动时 herald-totp 会检查 `HERALD_TOTP_ENCRYPTION_KEY` 是否正好为 32 字节。长度不正确时，服务会打印警告，enroll/verify 将返回 config_error。
 
 ### 处理
 
-1. 将 `HERALD_TOTP_ENCRYPTION_KEY` 设置为 32 字节（如 32 个 ASCII 字符或 64 个十六进制字符解码为 32 字节）。重启进程或容器。
+1. 将 `HERALD_TOTP_ENCRYPTION_KEY` 设置为正好 32 字节，可使用 `openssl rand -base64 24` 生成 32 字符的值。重启进程或容器。
 2. 确认运行时能读到该变量（环境变量名无拼写错误，Docker/K8s 传参正确）。
 3. 查看启动日志：若密钥缺失或过短，会打印 enroll/verify 将失败类警告。
 
