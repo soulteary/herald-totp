@@ -150,7 +150,7 @@ func EnrollConfirm(st *store.Store, log *logger.Logger) fiber.Handler {
 		cfg := totpConfigFromConfig()
 		cfg.Period = uint(e.Period)
 		cfg.Digits = totp.DigitsFromInt(e.Digits)
-		valid, err := totp.Validate(req.Code, secretPlain, cfg, time.Now())
+		valid, matchedStep, err := totp.ValidateWithStep(req.Code, secretPlain, cfg, time.Now())
 		if err != nil || !valid {
 			metrics.RecordEnrollConfirm("failure")
 			return respondBadRequest(c, "invalid", "code verification failed")
@@ -166,7 +166,10 @@ func EnrollConfirm(st *store.Store, log *logger.Logger) fiber.Handler {
 			Digits:       e.Digits,
 			Algo:         "SHA1",
 			Enabled:      true,
-			LastUsedStep: 0,
+			// The code used to confirm enrollment is itself a consumed TOTP
+			// value. Persist its matched counter so it cannot be reused for an
+			// immediate verification request in the same time window.
+			LastUsedStep: matchedStep,
 			CreatedAt:    now.Unix(),
 			UpdatedAt:    now.Unix(),
 		}

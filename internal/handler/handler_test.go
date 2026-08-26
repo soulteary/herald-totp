@@ -270,6 +270,13 @@ func TestEnrollConfirm_Success(t *testing.T) {
 	if !confirmOut.TotpEnabled || confirmOut.Subject != "user2" {
 		t.Errorf("confirm response = %+v", confirmOut)
 	}
+	credential, err := st.GetCredential(context.Background(), "user2")
+	if err != nil {
+		t.Fatalf("GetCredential: %v", err)
+	}
+	if credential == nil || credential.LastUsedStep <= 0 {
+		t.Fatalf("credential LastUsedStep = %+v, want consumed enrollment step", credential)
+	}
 
 	// The temporary enrollment is consumed by the same transaction that saves
 	// the credential and backup codes.
@@ -278,6 +285,68 @@ func TestEnrollConfirm_Success(t *testing.T) {
 	resp, _ = app.Test(req)
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Errorf("second enroll confirm status = %d, want 400", resp.StatusCode)
+	}
+}
+
+func TestEnrollConfirm_CodeCannotBeReusedForVerify(t *testing.T) {
+	st, mr, log := setupHandlerTest(t)
+	defer mr.Close()
+	oldKey := config.EncryptionKey
+	oldSubjectLimit, oldIPLimit := config.RateLimitPerSubject, config.RateLimitPerIP
+	config.EncryptionKey = testEncryptionKey
+	config.RateLimitPerSubject, config.RateLimitPerIP = 100, 100
+	defer func() {
+		config.EncryptionKey = oldKey
+		config.RateLimitPerSubject, config.RateLimitPerIP = oldSubjectLimit, oldIPLimit
+	}()
+
+	app := fiber.New()
+	app.Post("/enroll/start", EnrollStart(st, log))
+	app.Post("/enroll/confirm", EnrollConfirm(st, log))
+	app.Post("/verify", Verify(st, log))
+
+	req := httptest.NewRequest(http.MethodPost, "/enroll/start", bytes.NewBufferString(`{"subject":"replay-user"}`))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		t.Fatalf("enroll start = (%d, %v)", resp.StatusCode, err)
+	}
+	var startOut EnrollStartResponse
+	if err := json.NewDecoder(resp.Body).Decode(&startOut); err != nil {
+		t.Fatalf("decode enroll start: %v", err)
+	}
+	code, err := pqtotp.GenerateCodeCustom(startOut.SecretBase32, time.Now(), pqtotp.ValidateOpts{
+		Period: uint(config.TOTPPeriod), Skew: uint(config.TOTPSkew),
+		Digits: totp.DigitsFromInt(config.TOTPDigits), Algorithm: totp.AlgorithmSHA1,
+	})
+	if err != nil {
+		t.Fatalf("GenerateCodeCustom: %v", err)
+	}
+
+	confirmBody, _ := json.Marshal(EnrollConfirmRequest{EnrollID: startOut.EnrollID, Code: code})
+	req = httptest.NewRequest(http.MethodPost, "/enroll/confirm", bytes.NewReader(confirmBody))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err = app.Test(req)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		t.Fatalf("enroll confirm = (%d, %v)", resp.StatusCode, err)
+	}
+
+	verifyBody, _ := json.Marshal(VerifyRequest{Subject: "replay-user", Code: code})
+	req = httptest.NewRequest(http.MethodPost, "/verify", bytes.NewReader(verifyBody))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err = app.Test(req)
+	if err != nil {
+		t.Fatalf("verify: %v", err)
+	}
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("verify status = %d, want 400 replay", resp.StatusCode)
+	}
+	var out VerifyErrorResponse
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		t.Fatalf("decode verify: %v", err)
+	}
+	if out.Reason != "replay" {
+		t.Fatalf("verify reason = %q, want replay", out.Reason)
 	}
 }
 
@@ -353,7 +422,11 @@ func TestVerify_Success(t *testing.T) {
 	}
 	var startOut EnrollStartResponse
 	_ = json.NewDecoder(resp.Body).Decode(&startOut)
-	code, _ := pqtotp.GenerateCodeCustom(startOut.SecretBase32, time.Now(), pqtotp.ValidateOpts{
+	// Confirm with the previous accepted time step. The enrollment handler
+	// consumes that step, while the current step remains available for the
+	// verification exercised below.
+	confirmTime := time.Now().Add(-time.Duration(config.TOTPPeriod) * time.Second)
+	code, _ := pqtotp.GenerateCodeCustom(startOut.SecretBase32, confirmTime, pqtotp.ValidateOpts{
 		Period: uint(config.TOTPPeriod), Skew: uint(config.TOTPSkew),
 		Digits: totp.DigitsFromInt(config.TOTPDigits), Algorithm: totp.AlgorithmSHA1,
 	})
@@ -363,7 +436,8 @@ func TestVerify_Success(t *testing.T) {
 	if _, err := app.Test(req); err != nil {
 		t.Fatalf("app.Test enroll confirm: %v", err)
 	}
-	// Now verify with same code (same time step) - might fail if step advanced; use fresh code
+	// Verify with the current time step, which is newer than the step consumed
+	// by enrollment confirmation.
 	code2, _ := pqtotp.GenerateCodeCustom(startOut.SecretBase32, time.Now(), pqtotp.ValidateOpts{
 		Period: uint(config.TOTPPeriod), Skew: uint(config.TOTPSkew),
 		Digits: totp.DigitsFromInt(config.TOTPDigits), Algorithm: totp.AlgorithmSHA1,
