@@ -15,6 +15,7 @@ import (
 	"github.com/soulteary/herald-totp/internal/config"
 	"github.com/soulteary/herald-totp/internal/handler"
 	"github.com/soulteary/herald-totp/internal/metrics"
+	"github.com/soulteary/herald-totp/internal/redistls"
 	"github.com/soulteary/herald-totp/internal/store"
 )
 
@@ -24,6 +25,17 @@ func Setup(app *fiber.App, log *logger.Logger) (*store.Store, error) {
 		WithAddr(config.RedisAddr).
 		WithPassword(config.RedisPassword).
 		WithDB(config.RedisDB)
+	if config.RedisTLSEnabled {
+		tlsConfig, err := redistls.Config(
+			config.RedisTLSServerName,
+			config.RedisTLSCAFile,
+			config.RedisTLSInsecureSkipVerify,
+		)
+		if err != nil {
+			return nil, err
+		}
+		cfg.Dialer = redistls.Dialer(tlsConfig)
+	}
 	redisClient, err := rediskit.NewClient(cfg)
 	if err != nil {
 		return nil, err

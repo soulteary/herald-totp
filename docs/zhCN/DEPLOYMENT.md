@@ -14,6 +14,10 @@
 | REDIS_ADDR | localhost:6379 | Redis 地址。 |
 | REDIS_PASSWORD | | Redis 密码。 |
 | REDIS_DB | 0 | Redis 库号。 |
+| REDIS_TLS_ENABLED | false | 使用 TLS 连接 Redis。 |
+| REDIS_TLS_SERVER_NAME | | Redis 证书中预期的服务端名称。 |
+| REDIS_TLS_CA_FILE | | 可选的 Redis PEM CA 证书包。 |
+| REDIS_TLS_INSECURE_SKIP_VERIFY | false | 关闭证书校验，仅用于本地诊断。 |
 | TOTP_ISSUER | Herald | otpauth URI 中的 Issuer。 |
 | TOTP_PERIOD | 30 | TOTP 周期（秒）。 |
 | TOTP_DIGITS | 6 | TOTP 位数。 |
@@ -33,6 +37,10 @@
 export HERALD_TOTP_ENCRYPTION_KEY="$(openssl rand -base64 24)"
 go run .
 ```
+
+使用 Redis TLS 时，启用 `REDIS_TLS_ENABLED`，将 `REDIS_TLS_SERVER_NAME`
+设置为证书名称；私有 CA 可通过 `REDIS_TLS_CA_FILE` 提供。部署环境应保持
+`REDIS_TLS_INSECURE_SKIP_VERIFY=false`。
 
 或参考 [.env.example](../.env.example)，配合进程管理 / Docker 使用。
 

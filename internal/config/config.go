@@ -16,9 +16,13 @@ var (
 	LogLevel = env.Get("LOG_LEVEL", "info")
 
 	// Redis
-	RedisAddr     = env.Get("REDIS_ADDR", "localhost:6379")
-	RedisPassword = env.Get("REDIS_PASSWORD", "")
-	RedisDB       = env.GetInt("REDIS_DB", 0)
+	RedisAddr                  = env.Get("REDIS_ADDR", "localhost:6379")
+	RedisPassword              = env.Get("REDIS_PASSWORD", "")
+	RedisDB                    = env.GetInt("REDIS_DB", 0)
+	RedisTLSEnabled            = ParseBoolEnv("REDIS_TLS_ENABLED", false)
+	RedisTLSServerName         = env.Get("REDIS_TLS_SERVER_NAME", "")
+	RedisTLSCAFile             = env.Get("REDIS_TLS_CA_FILE", "")
+	RedisTLSInsecureSkipVerify = ParseBoolEnv("REDIS_TLS_INSECURE_SKIP_VERIFY", false)
 
 	// TOTP
 	TOTPIssuer = env.Get("TOTP_ISSUER", "Herald")
