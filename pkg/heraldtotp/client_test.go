@@ -141,7 +141,9 @@ func TestClient_Status_Verify_Revoke(t *testing.T) {
 		case r.Method == http.MethodGet && r.URL.Path == "/v1/status":
 			_ = json.NewEncoder(w).Encode(StatusResponse{Subject: "user1", TotpEnabled: true})
 		case r.Method == http.MethodPost && r.URL.Path == "/v1/verify":
-			_ = json.NewEncoder(w).Encode(VerifyResponse{OK: true})
+			_ = json.NewEncoder(w).Encode(VerifyResponse{
+				OK: true, Subject: "user1", AMR: []string{"totp"}, IssuedAt: 1700000000,
+			})
 		case r.Method == http.MethodPost && r.URL.Path == "/v1/revoke":
 			_ = json.NewEncoder(w).Encode(RevokeResponse{OK: true, Subject: "user1"})
 		default:
@@ -170,8 +172,11 @@ func TestClient_Status_Verify_Revoke(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Verify: %v", err)
 	}
-	if !verifyResp.OK {
-		t.Error("Verify: expected ok=true")
+	if !verifyResp.OK || verifyResp.Subject != "user1" || verifyResp.IssuedAt != 1700000000 {
+		t.Fatalf("Verify: incomplete response: %+v", verifyResp)
+	}
+	if len(verifyResp.AMR) != 1 || verifyResp.AMR[0] != "totp" {
+		t.Fatalf("Verify: AMR = %v, want [totp]", verifyResp.AMR)
 	}
 
 	// Revoke
@@ -275,6 +280,23 @@ func TestClient_Verify_NonOK(t *testing.T) {
 	_, err = client.Verify(context.Background(), &VerifyRequest{Subject: "user1", Code: "123456"})
 	if err == nil {
 		t.Fatal("expected error for 401 response")
+	}
+}
+
+func TestClient_Verify_InvalidJSON(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{invalid`))
+	}))
+	defer server.Close()
+
+	client, err := NewClient(DefaultOptions().WithBaseURL(server.URL))
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+	_, err = client.Verify(context.Background(), &VerifyRequest{Subject: "user1", Code: "123456"})
+	if err == nil {
+		t.Fatal("expected error for invalid JSON body")
 	}
 }
 
