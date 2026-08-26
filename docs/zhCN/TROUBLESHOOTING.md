@@ -6,7 +6,8 @@
 
 - [服务因配置无效无法启动](#服务因配置无效无法启动)
 - [401 Unauthorized](#401-unauthorized)
-- [验证返回 invalid / expired / replay / rate_limited](#验证返回-invalid--expired--replay--rate_limited)
+- [绑定返回 409 Conflict](#绑定返回-409-conflict)
+- [验证返回 invalid / replay / rate_limited](#验证返回-invalid--replay--rate_limited)
 - [绑定确认返回 expired 或 invalid](#绑定确认返回-expired-或-invalid)
 - [解除绑定返回 400 或 429](#解除绑定返回-400-或-429)
 - [绑定响应无 secret_base32](#绑定响应无-secret_base32)
@@ -35,7 +36,7 @@
 
 ### 现象
 
-- `POST /v1/enroll/start`、`POST /v1/enroll/confirm`、`POST /v1/verify` 或 `GET /v1/status` 返回 HTTP 401，`reason: "unauthorized"` 或 invalid/missing API key / HMAC 错误。
+- `POST /v1/enroll/start`、`POST /v1/enroll/confirm`、`POST /v1/verify`、`POST /v1/revoke` 或 `GET /v1/status` 返回 HTTP 401，`reason: "unauthorized"` 或 invalid/missing API key / HMAC 错误。
 
 ### 原因
 
@@ -58,18 +59,38 @@ herald-totp 已配置 `API_KEY`（或 HMAC），但请求未携带对应头或�
 
 ---
 
-## 验证返回 invalid / expired / replay / rate_limited
+## 绑定返回 409 Conflict
 
 ### 现象
 
-- `POST /v1/verify` 返回 200 且 `ok: false`，`reason` 为 `"invalid"`、`"expired"`、`"replay"` 或 `"rate_limited"`。
+- `POST /v1/enroll/start` 返回 `409 already_enrolled` 或
+  `409 enrollment_in_progress`。
+- `POST /v1/enroll/confirm` 返回 `409 already_enrolled`。
+
+### 原因与处理
+
+- **already_enrolled**：subject 已有 TOTP 凭证，重新绑定不会覆盖它。如确定
+  需要替换，应先调用 `POST /v1/revoke`，再发起新绑定。
+- **enrollment_in_progress**：subject 已有尚未过期的绑定流程。继续原流程，
+  或等待 `ENROLL_TTL` 过期后再重新开始。
+
+---
+
+## 验证返回 invalid / replay / rate_limited
+
+### 现象
+
+- `POST /v1/verify` 返回非 2xx 状态且 `ok: false`。常见映射为
+  `400/401 invalid`、`400 replay` 和 `429 rate_limited`。
 
 ### 原因与处理
 
 - **invalid**：TOTP 码或恢复码错误，或该 subject 未绑定 TOTP。确认用户输入的是当前验证器中的 6 位码或未使用过的恢复码；确认 subject（如 `user:12345`）与绑定用户一致。
-- **expired**：多用于 enroll（enroll_id 过期）。验证时确保用户 TOTP 仍存在（status 返回 totp_enabled: true）。
 - **replay**：同一 challenge_id（或同一码在时间窗内）已被使用。每次登录使用新的 challenge_id 或不传；成功验证后不要复用 challenge_id。
 - **rate_limited**：触发按 subject 或按 IP 的限流。等待限流窗口重置，或根据环境调整 `RATE_LIMIT_PER_SUBJECT` / `RATE_LIMIT_PER_IP`。
+
+enroll/confirm 接受的验证码也会被记录为已消费。使用该验证器进行 verify 前，
+需要等待进入下一个 TOTP 周期。
 
 ---
 
@@ -125,8 +146,13 @@ herald-totp 已配置 `API_KEY`（或 HMAC），但请求未携带对应头或�
 ### 处理
 
 1. 确认 `REDIS_ADDR`、`REDIS_PASSWORD`、`REDIS_DB` 正确，且 herald-totp 所在网络能访问 Redis（如同一 Docker 网络或正确主机/端口）。
-2. 若 Redis 启用了认证，设置 `REDIS_PASSWORD`。若使用 TLS，确保客户端配置（若驱动支持）正确。
-3. 查看 Redis 服务端日志与资源限制（内存、连接数）。确保 herald-totp 连接池大小足够。
+2. 若 Redis 启用了认证，设置 `REDIS_PASSWORD`。
+3. 使用 Redis TLS 时，设置 `REDIS_TLS_ENABLED=true`，将
+   `REDIS_TLS_SERVER_NAME` 配置为证书名称；私有 CA 使用
+   `REDIS_TLS_CA_FILE`。除本地诊断外保持
+   `REDIS_TLS_INSECURE_SKIP_VERIFY=false`。
+4. 确认 CA 文件可读取且至少包含一张 PEM 证书。
+5. 查看 Redis 服务端日志与资源限制（内存、连接数）。
 
 ---
 

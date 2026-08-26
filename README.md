@@ -71,7 +71,7 @@ sequenceDiagram
 | Variable | Description | Default | Required |
 |----------|-------------|---------|----------|
 | `PORT` | Listen port (with or without leading colon) | `:8084` | No |
-| `HERALD_TOTP_ENCRYPTION_KEY` | 32-byte AES-256 key for secret encryption | `` | Yes (for enroll/verify) |
+| `HERALD_TOTP_ENCRYPTION_KEY` | Exact 32-byte AES-256 key for secret encryption | `` | Yes (startup) |
 | `API_KEY` | If set, callers must send `X-API-Key` | `` | No |
 | `HMAC_SECRET` / `HERALD_TOTP_HMAC_KEYS` | HMAC auth | `` | No |
 | `REDIS_ADDR` | Redis address | `localhost:6379` | Yes |
@@ -89,28 +89,39 @@ See [docs/enUS/DEPLOYMENT.md](docs/enUS/DEPLOYMENT.md) for full options.
 ### Build & run (binary)
 
 ```bash
+export HERALD_TOTP_ENCRYPTION_KEY="$(openssl rand -base64 24)"
+export REDIS_ADDR=localhost:6379
 go build -o herald-totp .
 ./herald-totp
 ```
 
-With `HERALD_TOTP_ENCRYPTION_KEY` and Redis configured, enroll and verify will work.
+Redis must already be reachable at `REDIS_ADDR`. Keep the generated encryption
+key stable after credentials have been created; changing it makes existing TOTP
+secrets unreadable.
 
 ### Run with Docker
 
 ```bash
+export HERALD_TOTP_ENCRYPTION_KEY="$(openssl rand -base64 24)"
+docker network create herald-totp
+docker run -d --name herald-totp-redis --network herald-totp redis:8-alpine
 docker build -t herald-totp .
-docker run -d --name herald-totp -p 8084:8084 \
-  -e HERALD_TOTP_ENCRYPTION_KEY="0123456789abcdef0123456789abcdef" \
-  -e REDIS_ADDR=redis:6379 \
+docker run -d --name herald-totp --network herald-totp -p 8084:8084 \
+  -e HERALD_TOTP_ENCRYPTION_KEY \
+  -e REDIS_ADDR=herald-totp-redis:6379 \
   herald-totp
 ```
 
 Optional: add `-e API_KEY=your_shared_secret` and set `HERALD_TOTP_API_KEY` to the same value on Stargate.
 
+Released images are also available from GHCR. Use an immutable version tag for
+deployments, for example `ghcr.io/soulteary/herald-totp:v1.0.0`.
+
 ## Documentation
 
 - **[Documentation Index (English)](docs/enUS/README.md)** – [API](docs/enUS/API.md) | [Deployment](docs/enUS/DEPLOYMENT.md) | [Troubleshooting](docs/enUS/TROUBLESHOOTING.md) | [Security](docs/enUS/SECURITY.md)
 - **[文档索引（中文）](docs/zhCN/README.md)** – [API](docs/zhCN/API.md) | [部署](docs/zhCN/DEPLOYMENT.md) | [故障排查](docs/zhCN/TROUBLESHOOTING.md) | [安全](docs/zhCN/SECURITY.md)
+- **[Changelog and v1.0.0 upgrade notes](CHANGELOG.md)**
 
 ## Testing
 

@@ -9,27 +9,31 @@
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| PORT | :8084 | Listen address. |
+| PORT | :8084 | Non-empty listen port, with or without a leading colon. |
 | LOG_LEVEL | info | Log level. |
-| REDIS_ADDR | localhost:6379 | Redis address. |
+| REDIS_ADDR | localhost:6379 | Non-empty Redis address. |
 | REDIS_PASSWORD | | Redis password. |
-| REDIS_DB | 0 | Redis DB number. |
+| REDIS_DB | 0 | Redis DB number; must be non-negative. |
 | REDIS_TLS_ENABLED | false | Connect to Redis over TLS. |
-| REDIS_TLS_SERVER_NAME | | Expected Redis certificate server name. |
-| REDIS_TLS_CA_FILE | | Optional PEM CA bundle for Redis. |
-| REDIS_TLS_INSECURE_SKIP_VERIFY | false | Disable certificate verification; local diagnostics only. |
-| TOTP_ISSUER | Herald | Issuer name in otpauth URI. |
-| TOTP_PERIOD | 30 | TOTP period (seconds). |
-| TOTP_DIGITS | 6 | TOTP digit count. |
-| TOTP_SKEW | 1 | Time step skew (steps). |
-| ENROLL_TTL | 10m | Enrollment temp state TTL. |
-| HERALD_TOTP_ENCRYPTION_KEY | | **Required** for enroll/verify. 32-byte key for AES-256 (secret encryption). |
+| REDIS_TLS_SERVER_NAME | | Expected Redis certificate server name; requires `REDIS_TLS_ENABLED=true`. |
+| REDIS_TLS_CA_FILE | | Optional PEM CA bundle; requires `REDIS_TLS_ENABLED=true`. |
+| REDIS_TLS_INSECURE_SKIP_VERIFY | false | Disable certificate verification; diagnostics only and requires TLS to be enabled. |
+| TOTP_ISSUER | Herald | Non-empty issuer name in the otpauth URI. |
+| TOTP_PERIOD | 30 | TOTP period in seconds; `1` to `300`. |
+| TOTP_DIGITS | 6 | TOTP digit count; `6` or `8`. |
+| TOTP_SKEW | 1 | Time-step skew; `0` to `10` steps. |
+| ENROLL_TTL | 10m | Positive enrollment temporary-state TTL. |
+| HERALD_TOTP_ENCRYPTION_KEY | | **Required at startup**; exactly 32 bytes for AES-256-GCM. |
 | API_KEY | | Optional; service auth. |
 | HMAC_SECRET | | Optional; HMAC auth. |
-| HERALD_TOTP_HMAC_KEYS | | Optional; JSON map for key rotation. |
-| SERVICE_NAME | herald-totp | Service name (e.g. for HMAC). |
-| RATE_LIMIT_PER_SUBJECT | 20 | Max requests per subject in a fixed one-hour window starting with the first request. |
-| RATE_LIMIT_PER_IP | 30 | Max requests per IP in a fixed one-minute window starting with the first request. |
+| HERALD_TOTP_HMAC_KEYS | | Optional non-empty JSON map for key rotation; key IDs and secrets must be non-empty. |
+| SERVICE_NAME | herald-totp | Service name reported by the health endpoint. |
+| EXPOSE_SECRET_IN_ENROLL | true | Include `secret_base32` in enroll/start. Set to `false` in production when manual entry is not required. |
+| RATE_LIMIT_PER_SUBJECT | 20 | Positive request limit per subject in a fixed one-hour window starting with the first request. |
+| RATE_LIMIT_PER_IP | 30 | Positive request limit per IP in a fixed one-minute window starting with the first request. |
+
+All validation failures are reported together and the process exits before
+opening the listen socket or initializing Redis.
 
 ## Run
 
@@ -43,7 +47,21 @@ certificate name, and optionally provide a private CA bundle through
 `REDIS_TLS_CA_FILE`. Keep `REDIS_TLS_INSECURE_SKIP_VERIFY=false` in deployed
 environments.
 
-Or use the [.env.example](../.env.example) and run with your process manager / Docker.
+Or copy [`.env.example`](../../.env.example), replace every secret placeholder,
+and load it with your process manager or container runtime. The example file is
+not production configuration.
+
+## Release artifacts
+
+Each release publishes Linux, macOS, and Windows binaries plus
+`checksums.txt`. Multi-architecture container images are published to GHCR:
+
+```bash
+docker pull ghcr.io/soulteary/herald-totp:v1.0.0
+```
+
+Use the full version tag for reproducible deployments. The release workflow
+also publishes SemVer aliases without the leading `v`.
 
 ## Stargate + Herald integration
 
@@ -54,7 +72,10 @@ Or use the [.env.example](../.env.example) and run with your process manager / D
 
 ## Health
 
-- **GET /healthz**: includes Redis check. Use for readiness/liveness.
+- **GET /healthz**: includes a Redis dependency check. Use it as a readiness
+  probe. Do not use it as a Kubernetes liveness probe: a Redis outage would
+  otherwise restart healthy application processes. The service does not
+  currently expose a separate dependency-free HTTP liveness endpoint.
 
 ## Monitoring
 
@@ -71,3 +92,4 @@ Or use the [.env.example](../.env.example) and run with your process manager / D
 - Keep `HERALD_TOTP_ENCRYPTION_KEY` secret and exactly 32 bytes.
 - Use API key or HMAC for service-to-service calls.
 - Run herald-totp in a private network; do not expose it to the public internet.
+- The official container runs as the unprivileged user and group `10001:10001`.

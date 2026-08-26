@@ -6,7 +6,8 @@ This guide helps you diagnose and resolve common issues with herald-totp.
 
 - [Service Fails to Start (invalid configuration)](#service-fails-to-start-invalid-configuration)
 - [401 Unauthorized](#401-unauthorized)
-- [Verify Returns invalid / expired / replay / rate_limited](#verify-returns-invalid--expired--replay--rate_limited)
+- [Enrollment Returns 409 Conflict](#enrollment-returns-409-conflict)
+- [Verify Returns invalid / replay / rate_limited](#verify-returns-invalid--replay--rate_limited)
 - [Enroll Confirm Returns expired or invalid](#enroll-confirm-returns-expired-or-invalid)
 - [Revoke Returns 400 or 429](#revoke-returns-400-or-429)
 - [Enroll Response: No secret_base32](#enroll-response-no-secret_base32)
@@ -35,7 +36,7 @@ At startup, herald-totp validates required encryption, Redis, TOTP, TLS, enrollm
 
 ### Symptoms
 
-- `POST /v1/enroll/start`, `POST /v1/enroll/confirm`, `POST /v1/verify`, or `GET /v1/status` returns HTTP 401 with `reason: "unauthorized"` or `invalid or missing API key` / HMAC error.
+- `POST /v1/enroll/start`, `POST /v1/enroll/confirm`, `POST /v1/verify`, `POST /v1/revoke`, or `GET /v1/status` returns HTTP 401 with `reason: "unauthorized"` or `invalid or missing API key` / HMAC error.
 
 ### Cause
 
@@ -58,18 +59,39 @@ herald-totp has `API_KEY` (or HMAC) set, but the request either does not send th
 
 ---
 
-## Verify Returns invalid / expired / replay / rate_limited
+## Enrollment Returns 409 Conflict
 
 ### Symptoms
 
-- `POST /v1/verify` returns 200 with `ok: false` and `reason: "invalid"`, `"expired"`, `"replay"`, or `"rate_limited"`.
+- `POST /v1/enroll/start` returns `409 already_enrolled` or
+  `409 enrollment_in_progress`.
+- `POST /v1/enroll/confirm` returns `409 already_enrolled`.
+
+### Causes and Solutions
+
+- **already_enrolled**: The subject already has a TOTP credential. Re-enrollment
+  never overwrites it. If replacement is intentional, call `POST /v1/revoke`
+  first and then start a new enrollment.
+- **enrollment_in_progress**: The subject already has an unexpired enrollment.
+  Continue that flow or wait for `ENROLL_TTL` to expire before starting again.
+
+---
+
+## Verify Returns invalid / replay / rate_limited
+
+### Symptoms
+
+- `POST /v1/verify` returns a non-2xx status with `ok: false`. Common mappings
+  are `400/401 invalid`, `400 replay`, and `429 rate_limited`.
 
 ### Causes and Solutions
 
 - **invalid**: The TOTP code or backup code is wrong, or the subject has no TOTP enrolled. Ensure the user enters the current 6-digit code from their authenticator app, or a valid unused backup code. Check that the subject (e.g. `user:12345`) matches the enrolled user.
-- **expired**: Not typically used for verify; more common for enroll (enroll_id expired). For verify, ensure the user’s TOTP secret is still stored (status returns totp_enabled: true).
 - **replay**: The same challenge_id (or same code in a time window) was already used. Ensure each login attempt uses a new challenge_id or omit it; do not reuse a challenge_id after successful verify.
 - **rate_limited**: Per-subject or per-IP rate limit exceeded. Wait for the rate limit window to reset, or adjust `RATE_LIMIT_PER_SUBJECT` / `RATE_LIMIT_PER_IP` if appropriate for your environment.
+
+The code accepted by enroll/confirm is also recorded as consumed. Wait for the
+authenticator to enter the next TOTP period before using it for verify.
 
 ---
 
@@ -125,8 +147,13 @@ herald-totp has `API_KEY` (or HMAC) set, but the request either does not send th
 ### Solutions
 
 1. Verify `REDIS_ADDR`, `REDIS_PASSWORD`, and `REDIS_DB` are correct and that Redis is reachable from the herald-totp network (e.g. same Docker network, or correct host/port).
-2. If Redis is protected by auth, set `REDIS_PASSWORD`. If Redis uses TLS, ensure the client configuration (if supported by your Redis driver) is set.
-3. Check Redis server logs and resource limits (memory, connections). Ensure herald-totp has enough connections (default pool size).
+2. If Redis is protected by auth, set `REDIS_PASSWORD`.
+3. For Redis TLS, set `REDIS_TLS_ENABLED=true`, configure
+   `REDIS_TLS_SERVER_NAME` to match the certificate, and set
+   `REDIS_TLS_CA_FILE` when using a private CA. Keep
+   `REDIS_TLS_INSECURE_SKIP_VERIFY=false` outside local diagnostics.
+4. Confirm the CA file is readable and contains at least one PEM certificate.
+5. Check Redis server logs and resource limits (memory and connections).
 
 ---
 

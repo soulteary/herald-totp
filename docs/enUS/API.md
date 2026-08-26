@@ -13,9 +13,35 @@ http://localhost:8084
 When `API_KEY` or `HMAC_SECRET` / `HERALD_TOTP_HMAC_KEYS` is set, callers (e.g. Herald, which proxies for Stargate) must authenticate:
 
 - **API Key**: send `X-API-Key` header with the same value.
-- **HMAC**: send `X-Timestamp`, `X-Service`, and `X-Signature`. Send `X-Key-Id` whenever `HERALD_TOTP_HMAC_KEYS` contains multiple keys; it may be omitted for a single mapped key. Signature: `HMAC-SHA256(secret, timestamp + ":" + service + ":" + body)`.
+- **HMAC**: send `X-Timestamp`, `X-Service`, and `X-Signature`. The timestamp is Unix seconds, the body is the exact request-body byte sequence (empty for requests without a body), and the signature is the lowercase hexadecimal encoding of `HMAC-SHA256(secret, timestamp + ":" + service + ":" + body)`. Send `X-Key-Id` whenever `HERALD_TOTP_HMAC_KEYS` contains multiple keys; it may be omitted for a single mapped key.
 
 If neither is set, no authentication is required (dev only).
+
+## Go client
+
+The supported Go client is available at
+`github.com/soulteary/herald-totp/pkg/heraldtotp`:
+
+```go
+opts := heraldtotp.DefaultOptions().
+	WithBaseURL("http://herald-totp:8084").
+	WithAPIKey(os.Getenv("HERALD_TOTP_API_KEY"))
+
+client, err := heraldtotp.NewClient(opts)
+if err != nil {
+	return err
+}
+
+result, err := client.Verify(ctx, &heraldtotp.VerifyRequest{
+	Subject:     "user:12345",
+	Code:        code,
+	ChallengeID: challengeID,
+})
+```
+
+For mapped HMAC keys, use `WithHMACSecret` and `WithHMACKeyID`. The default
+caller service name is `stargate`; set `Options.Service` when another caller
+identity must be included in the signature.
 
 ## Endpoints
 
@@ -58,7 +84,10 @@ Generate a TOTP secret and return `enroll_id` and `otpauth_uri` for the frontend
 ```
 When `EXPOSE_SECRET_IN_ENROLL=false`, `secret_base32` is omitted (only `otpauth_uri` for QR).
 
-**Errors:** `400` invalid_request (e.g. subject empty), `429` rate_limited, `500` config_error / internal_error.
+Starting another enrollment does not replace an existing credential. Call
+`POST /v1/revoke` before intentionally re-enrolling a subject.
+
+**Errors:** `400 invalid_request`, `409 already_enrolled`, `409 enrollment_in_progress`, `429 rate_limited`, `500 config_error`, or `500 internal_error`.
 
 ---
 
@@ -71,6 +100,8 @@ User has scanned the QR and enters one TOTP code to confirm. On success, credent
 The credential, backup-code hashes, and temporary enrollment are committed in
 one Redis transaction. An `enroll_id` can therefore be confirmed only once,
 and backup codes are never returned unless their hashes were persisted.
+The TOTP counter used for confirmation is recorded as consumed; wait for a new
+TOTP period before using the authenticator for `/v1/verify`.
 
 **Request body:**
 
@@ -88,7 +119,7 @@ and backup codes are never returned unless their hashes were persisted.
 }
 ```
 
-**Errors:** `400` expired (enrollment not found/expired), invalid (code wrong), `500` internal_error.
+**Errors:** `400 expired`, `400 invalid`, `409 already_enrolled`, or `500 internal_error`.
 
 ---
 
@@ -122,13 +153,23 @@ and non-empty `challenge_id` values are also consumed atomically.
 ```
 When verified via backup code, `amr` is `["totp", "backup_code"]`.
 
-**Error response (4xx):**
+**Error response:**
 ```json
 {
   "ok": false,
-  "reason": "invalid" | "expired" | "replay" | "rate_limited"
+  "reason": "invalid"
 }
 ```
+
+| Status | Reason | Meaning |
+|--------|--------|---------|
+| `400` | `invalid_request` | Required fields are missing or the JSON body is invalid. |
+| `400` | `invalid` | The subject has no enabled TOTP credential. |
+| `401` | `invalid` | The supplied TOTP or backup code is invalid. |
+| `400` | `replay` | The TOTP counter or `challenge_id` was already consumed. |
+| `429` | `rate_limited` | The subject or source IP exceeded its configured limit. |
+| `500` | `config_error` | The encryption configuration is invalid. Startup validation normally prevents this state. |
+| `500` | `internal_error` | Redis, decryption, or another internal operation failed. |
 
 ---
 
@@ -156,7 +197,7 @@ revocation.
 }
 ```
 
-**Errors:** `400` invalid_request (subject missing), `429` rate_limited.
+**Errors:** `400 invalid_request`, `429 rate_limited`, or `500 internal_error`.
 
 ---
 
