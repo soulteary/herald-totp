@@ -130,8 +130,11 @@ type VerifyRequest struct {
 
 // VerifyResponse is the response from POST /v1/verify.
 type VerifyResponse struct {
-	OK     bool   `json:"ok"`
-	Reason string `json:"reason,omitempty"`
+	OK       bool     `json:"ok"`
+	Subject  string   `json:"subject,omitempty"`
+	AMR      []string `json:"amr,omitempty"`
+	IssuedAt int64    `json:"issued_at,omitempty"`
+	Reason   string   `json:"reason,omitempty"`
 }
 
 // EnrollStartRequest is the request for POST /v1/enroll/start.
@@ -282,7 +285,9 @@ func (c *Client) Verify(ctx context.Context, req *VerifyRequest) (*VerifyRespons
 	defer func() { _ = resp.Body.Close() }()
 	respBody, _ := io.ReadAll(resp.Body)
 	var out VerifyResponse
-	_ = json.Unmarshal(respBody, &out)
+	if err := json.Unmarshal(respBody, &out); err != nil {
+		return nil, fmt.Errorf("verify returned %d with invalid JSON: %w", resp.StatusCode, err)
+	}
 	if resp.StatusCode != http.StatusOK {
 		return &out, fmt.Errorf("verify returned %d: %s", resp.StatusCode, string(respBody))
 	}
