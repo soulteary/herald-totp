@@ -17,16 +17,16 @@ func TestInitialize(t *testing.T) {
 
 func TestInitialize_HMACKeys(t *testing.T) {
 	oldJSON, oldSecret := HMACKeysJSON, HMACSecret
-	oldMap, oldDefault := hmacKeysMap, hmacDefaultKeyID
+	oldMap, oldSingle := hmacKeysMap, hmacSingleKeyID
 	defer func() {
 		HMACKeysJSON, HMACSecret = oldJSON, oldSecret
-		hmacKeysMap, hmacDefaultKeyID = oldMap, oldDefault
+		hmacKeysMap, hmacSingleKeyID = oldMap, oldSingle
 	}()
 
 	HMACKeysJSON = `{"primary":"secret-1","secondary":"secret-2"}`
 	HMACSecret = "legacy"
 	hmacKeysMap = nil
-	hmacDefaultKeyID = ""
+	hmacSingleKeyID = ""
 	Initialize(logger.New(logger.Config{Level: logger.Disabled}))
 
 	if !HasHMACKeys() {
@@ -38,8 +38,8 @@ func TestInitialize_HMACKeys(t *testing.T) {
 	if got := GetHMACSecret("missing"); got != "" {
 		t.Fatalf("GetHMACSecret(missing) = %q, want empty", got)
 	}
-	if got := GetHMACSecret(""); got != "secret-1" && got != "secret-2" {
-		t.Fatalf("GetHMACSecret(default) = %q", got)
+	if got := GetHMACSecret(""); got != "" {
+		t.Fatalf("GetHMACSecret(without key ID) = %q, want empty for multiple keys", got)
 	}
 	if AllowNoAuth() {
 		t.Fatal("AllowNoAuth = true with configured HMAC keys")
@@ -47,16 +47,30 @@ func TestInitialize_HMACKeys(t *testing.T) {
 }
 
 func TestInitialize_InvalidHMACKeys(t *testing.T) {
-	oldJSON, oldMap, oldDefault := HMACKeysJSON, hmacKeysMap, hmacDefaultKeyID
+	oldJSON, oldMap, oldSingle := HMACKeysJSON, hmacKeysMap, hmacSingleKeyID
 	defer func() {
-		HMACKeysJSON, hmacKeysMap, hmacDefaultKeyID = oldJSON, oldMap, oldDefault
+		HMACKeysJSON, hmacKeysMap, hmacSingleKeyID = oldJSON, oldMap, oldSingle
 	}()
 	HMACKeysJSON = "{invalid"
 	hmacKeysMap = nil
-	hmacDefaultKeyID = ""
+	hmacSingleKeyID = ""
 	Initialize(logger.New(logger.Config{Level: logger.Disabled}))
 	if HasHMACKeys() {
 		t.Fatal("invalid JSON should not configure HMAC keys")
+	}
+}
+
+func TestInitialize_SingleHMACKeyAllowsOmittedKeyID(t *testing.T) {
+	oldJSON, oldMap, oldSingle := HMACKeysJSON, hmacKeysMap, hmacSingleKeyID
+	defer func() {
+		HMACKeysJSON, hmacKeysMap, hmacSingleKeyID = oldJSON, oldMap, oldSingle
+	}()
+	HMACKeysJSON = `{"only":"secret"}`
+	hmacKeysMap = nil
+	hmacSingleKeyID = ""
+	Initialize(logger.New(logger.Config{Level: logger.Disabled}))
+	if got := GetHMACSecret(""); got != "secret" {
+		t.Fatalf("GetHMACSecret(without key ID) = %q, want single configured secret", got)
 	}
 }
 

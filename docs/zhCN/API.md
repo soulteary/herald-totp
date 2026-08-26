@@ -13,7 +13,7 @@ http://localhost:8084
 当配置了 `API_KEY` 或 `HMAC_SECRET` / `HERALD_TOTP_HMAC_KEYS` 时，调用方（如代理 Stargate 请求的 Herald）必须鉴权：
 
 - **API Key**：请求头 `X-API-Key` 与配置一致。
-- **HMAC**：请求头 `X-Timestamp`、`X-Service`、`X-Signature`（可选 `X-Key-Id`）。签名为 `HMAC-SHA256(secret, timestamp + ":" + service + ":" + body)`。
+- **HMAC**：发送请求头 `X-Timestamp`、`X-Service`、`X-Signature`。当 `HERALD_TOTP_HMAC_KEYS` 包含多个密钥时必须发送 `X-Key-Id`；仅配置一个映射密钥时可省略。签名为 `HMAC-SHA256(secret, timestamp + ":" + service + ":" + body)`。
 
 若均未配置，则不鉴权（仅开发环境）。
 

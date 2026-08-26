@@ -38,8 +38,8 @@ var (
 	HMACKeysJSON = env.Get("HERALD_TOTP_HMAC_KEYS", "")
 	ServiceName  = env.Get("SERVICE_NAME", "herald-totp")
 
-	hmacKeysMap      map[string]string
-	hmacDefaultKeyID string
+	hmacKeysMap     map[string]string
+	hmacSingleKeyID string
 
 	// Rate limit
 	RateLimitPerSubject = env.GetInt("RATE_LIMIT_PER_SUBJECT", 20) // per hour
@@ -56,9 +56,11 @@ func Initialize(l *logger.Logger) {
 		if err := parseHMACKeys(); err != nil {
 			log.Warn().Err(err).Msg("Failed to parse HERALD_TOTP_HMAC_KEYS")
 		} else {
-			for keyID := range hmacKeysMap {
-				hmacDefaultKeyID = keyID
-				break
+			hmacSingleKeyID = ""
+			if len(hmacKeysMap) == 1 {
+				for keyID := range hmacKeysMap {
+					hmacSingleKeyID = keyID
+				}
 			}
 		}
 	}
@@ -81,7 +83,12 @@ func ParseBoolEnv(key string, defaultVal bool) bool {
 func GetHMACSecret(keyID string) string {
 	if len(hmacKeysMap) > 0 {
 		if keyID == "" {
-			keyID = hmacDefaultKeyID
+			// Omitting X-Key-Id is unambiguous only when exactly one mapped
+			// key exists. Multiple keys always require an explicit key ID.
+			keyID = hmacSingleKeyID
+			if keyID == "" {
+				return ""
+			}
 		}
 		if s, ok := hmacKeysMap[keyID]; ok {
 			return s

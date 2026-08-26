@@ -333,7 +333,7 @@ func TestClient_Revoke_NonOK(t *testing.T) {
 
 func TestClient_WithHMACSecret(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("X-Timestamp") == "" || r.Header.Get("X-Service") == "" || r.Header.Get("X-Signature") == "" {
+		if r.Header.Get("X-Timestamp") == "" || r.Header.Get("X-Service") == "" || r.Header.Get("X-Signature") == "" || r.Header.Get("X-Key-Id") != "primary" {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
@@ -344,6 +344,7 @@ func TestClient_WithHMACSecret(t *testing.T) {
 	client, err := NewClient(DefaultOptions().
 		WithBaseURL(server.URL).
 		WithHMACSecret("test-hmac-secret").
+		WithHMACKeyID("primary").
 		WithTimeout(5 * time.Second))
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
