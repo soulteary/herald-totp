@@ -31,7 +31,7 @@ func Config(serverName, caFile string, insecureSkipVerify bool) (*tls.Config, er
 		roots = x509.NewCertPool()
 	}
 	if ok := roots.AppendCertsFromPEM(pem); !ok {
-		return nil, fmt.Errorf("Redis TLS CA file contains no certificates")
+		return nil, fmt.Errorf("redis TLS CA file contains no certificates")
 	}
 	cfg.RootCAs = roots
 	return cfg, nil
