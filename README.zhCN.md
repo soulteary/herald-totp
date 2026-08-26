@@ -71,7 +71,7 @@ sequenceDiagram
 | 变量 | 说明 | 默认值 | 必填 |
 |------|------|--------|------|
 | `PORT` | 监听端口（可带或不带冒号） | `:8084` | 否 |
-| `HERALD_TOTP_ENCRYPTION_KEY` | 32 字节 AES-256 加密密钥 | `` | 是（enroll/verify） |
+| `HERALD_TOTP_ENCRYPTION_KEY` | 正好 32 字节的 AES-256 加密密钥 | `` | 是（启动必填） |
 | `API_KEY` | 若设置，调用方需在 `X-API-Key` 中携带 | `` | 否 |
 | `HMAC_SECRET` / `HERALD_TOTP_HMAC_KEYS` | HMAC 鉴权 | `` | 否 |
 | `REDIS_ADDR` | Redis 地址 | `localhost:6379` | 是 |
@@ -89,28 +89,38 @@ sequenceDiagram
 ### 构建与运行（二进制）
 
 ```bash
+export HERALD_TOTP_ENCRYPTION_KEY="$(openssl rand -base64 24)"
+export REDIS_ADDR=localhost:6379
 go build -o herald-totp .
 ./herald-totp
 ```
 
-配置好 `HERALD_TOTP_ENCRYPTION_KEY` 与 Redis 后，enroll 与 verify 即可使用。
+Redis 必须能够通过 `REDIS_ADDR` 访问。创建凭证后应长期保留生成的加密密钥；
+直接更换密钥会导致已有 TOTP 密钥无法解密。
 
 ### 使用 Docker 运行
 
 ```bash
+export HERALD_TOTP_ENCRYPTION_KEY="$(openssl rand -base64 24)"
+docker network create herald-totp
+docker run -d --name herald-totp-redis --network herald-totp redis:8-alpine
 docker build -t herald-totp .
-docker run -d --name herald-totp -p 8084:8084 \
-  -e HERALD_TOTP_ENCRYPTION_KEY="0123456789abcdef0123456789abcdef" \
-  -e REDIS_ADDR=redis:6379 \
+docker run -d --name herald-totp --network herald-totp -p 8084:8084 \
+  -e HERALD_TOTP_ENCRYPTION_KEY \
+  -e REDIS_ADDR=herald-totp-redis:6379 \
   herald-totp
 ```
 
 可选：添加 `-e API_KEY=your_shared_secret`，并在 Stargate 侧将 `HERALD_TOTP_API_KEY` 设为相同值。
 
+正式版本镜像同时发布到 GHCR。部署时建议使用不可变版本标签，例如
+`ghcr.io/soulteary/herald-totp:v1.0.0`。
+
 ## 文档
 
 - **[Documentation Index (English)](docs/enUS/README.md)** – [API](docs/enUS/API.md) | [Deployment](docs/enUS/DEPLOYMENT.md) | [Troubleshooting](docs/enUS/TROUBLESHOOTING.md) | [Security](docs/enUS/SECURITY.md)
 - **[文档索引（中文）](docs/zhCN/README.md)** – [API](docs/zhCN/API.md) | [部署](docs/zhCN/DEPLOYMENT.md) | [故障排查](docs/zhCN/TROUBLESHOOTING.md) | [安全](docs/zhCN/SECURITY.md)
+- **[更新记录与 v1.0.0 升级说明](CHANGELOG.md)**
 
 ## 测试
 

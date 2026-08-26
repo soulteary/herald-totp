@@ -11,6 +11,7 @@ Welcome to the herald-totp documentation. herald-totp is the TOTP 2FA service fo
 ### Core Documents
 
 - **[README.md](../../README.md)** - Project overview and quick start guide
+- **[CHANGELOG.md](../../CHANGELOG.md)** - Release history and v1.0.0 upgrade notes
 
 ### Detailed Documents
 
@@ -18,12 +19,14 @@ Welcome to the herald-totp documentation. herald-totp is the TOTP 2FA service fo
   - Base URL and authentication (API Key / HMAC)
   - POST /v1/enroll/start, POST /v1/enroll/confirm
   - POST /v1/verify (TOTP or backup code)
+  - POST /v1/revoke
   - GET /v1/status
   - GET /healthz
   - Error codes and HTTP status codes
 
 - **[DEPLOYMENT.md](DEPLOYMENT.md)** - Deployment guide
   - Binary and Docker run
+  - Release binaries, checksums, and GHCR images
   - Configuration options (encryption key, Redis, TOTP params, rate limits)
   - Integration with Stargate
   - Health and monitoring
@@ -65,6 +68,7 @@ Welcome to the herald-totp documentation. herald-totp is the TOTP 2FA service fo
 herald-totp/
 ├── README.md              # Main project document (English)
 ├── README.zhCN.md         # Main project document (Chinese)
+├── CHANGELOG.md           # Release history and upgrade notes
 ├── docs/
 │   ├── enUS/
 │   │   ├── README.md       # Documentation index (this file)
@@ -87,3 +91,4 @@ herald-totp/
 - Configuration and Stargate integration: [DEPLOYMENT.md](DEPLOYMENT.md)
 - Common issues: [TROUBLESHOOTING.md](TROUBLESHOOTING.md)
 - Security: [SECURITY.md](SECURITY.md)
+- Releases and upgrades: [CHANGELOG.md](../../CHANGELOG.md)

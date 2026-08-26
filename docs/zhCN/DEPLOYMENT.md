@@ -9,27 +9,30 @@
 
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
-| PORT | :8084 | 监听地址。 |
+| PORT | :8084 | 非空监听端口，可带或不带前导冒号。 |
 | LOG_LEVEL | info | 日志级别。 |
-| REDIS_ADDR | localhost:6379 | Redis 地址。 |
+| REDIS_ADDR | localhost:6379 | 非空 Redis 地址。 |
 | REDIS_PASSWORD | | Redis 密码。 |
-| REDIS_DB | 0 | Redis 库号。 |
+| REDIS_DB | 0 | Redis 库号，必须为非负数。 |
 | REDIS_TLS_ENABLED | false | 使用 TLS 连接 Redis。 |
-| REDIS_TLS_SERVER_NAME | | Redis 证书中预期的服务端名称。 |
-| REDIS_TLS_CA_FILE | | 可选的 Redis PEM CA 证书包。 |
-| REDIS_TLS_INSECURE_SKIP_VERIFY | false | 关闭证书校验，仅用于本地诊断。 |
-| TOTP_ISSUER | Herald | otpauth URI 中的 Issuer。 |
-| TOTP_PERIOD | 30 | TOTP 周期（秒）。 |
-| TOTP_DIGITS | 6 | TOTP 位数。 |
-| TOTP_SKEW | 1 | 时间步长偏移（步数）。 |
-| ENROLL_TTL | 10m | 绑定临时态 TTL。 |
-| HERALD_TOTP_ENCRYPTION_KEY | | **必填**，用于 enroll/verify。32 字节 AES-256 密钥（secret 加密）。 |
+| REDIS_TLS_SERVER_NAME | | Redis 证书中预期的服务端名称；要求 `REDIS_TLS_ENABLED=true`。 |
+| REDIS_TLS_CA_FILE | | 可选 Redis PEM CA 证书包；要求已启用 TLS。 |
+| REDIS_TLS_INSECURE_SKIP_VERIFY | false | 关闭证书校验，仅用于诊断且要求已启用 TLS。 |
+| TOTP_ISSUER | Herald | otpauth URI 中的非空 Issuer。 |
+| TOTP_PERIOD | 30 | TOTP 周期，范围 `1` 到 `300` 秒。 |
+| TOTP_DIGITS | 6 | TOTP 位数，只能为 `6` 或 `8`。 |
+| TOTP_SKEW | 1 | 时间步偏移，范围 `0` 到 `10`。 |
+| ENROLL_TTL | 10m | 绑定临时态 TTL，必须为正值。 |
+| HERALD_TOTP_ENCRYPTION_KEY | | **启动必填**；正好 32 字节，用于 AES-256-GCM。 |
 | API_KEY | | 可选；服务鉴权。 |
 | HMAC_SECRET | | 可选；HMAC 鉴权。 |
-| HERALD_TOTP_HMAC_KEYS | | 可选；JSON 密钥映射，支持轮换。 |
-| SERVICE_NAME | herald-totp | 服务名（如 HMAC 用）。 |
-| RATE_LIMIT_PER_SUBJECT | 20 | 每 subject 固定一小时窗口的请求上限；窗口从首次请求开始。 |
-| RATE_LIMIT_PER_IP | 30 | 每 IP 固定一分钟窗口的请求上限；窗口从首次请求开始。 |
+| HERALD_TOTP_HMAC_KEYS | | 可选的非空 JSON 密钥映射；密钥 ID 和密钥均不得为空。 |
+| SERVICE_NAME | herald-totp | 健康检查接口报告的服务名称。 |
+| EXPOSE_SECRET_IN_ENROLL | true | enroll/start 是否返回 `secret_base32`；生产环境不需要手动录入时建议设为 `false`。 |
+| RATE_LIMIT_PER_SUBJECT | 20 | 每 subject 固定一小时窗口的正整数请求上限；窗口从首次请求开始。 |
+| RATE_LIMIT_PER_IP | 30 | 每 IP 固定一分钟窗口的正整数请求上限；窗口从首次请求开始。 |
+
+启动时会一次性报告全部配置校验问题，并在监听端口或初始化 Redis 前退出。
 
 ## 运行
 
@@ -42,7 +45,20 @@ go run .
 设置为证书名称；私有 CA 可通过 `REDIS_TLS_CA_FILE` 提供。部署环境应保持
 `REDIS_TLS_INSECURE_SKIP_VERIFY=false`。
 
-或参考 [.env.example](../.env.example)，配合进程管理 / Docker 使用。
+也可复制 [`.env.example`](../../.env.example)，替换其中所有密钥占位符后，
+配合进程管理器或容器运行时使用。该示例文件不能直接作为生产配置。
+
+## 发布产物
+
+每个版本会发布 Linux、macOS、Windows 二进制文件以及 `checksums.txt`，
+并向 GHCR 发布多架构容器镜像：
+
+```bash
+docker pull ghcr.io/soulteary/herald-totp:v1.0.0
+```
+
+部署时应使用完整版本标签以保证结果可复现。发布流程也会生成不带前导 `v`
+的 SemVer 别名。
 
 ## 与 Stargate、Herald 集成
 
@@ -53,7 +69,9 @@ go run .
 
 ## 健康检查
 
-- **GET /healthz**：包含 Redis 检查，可用于就绪/存活探针。
+- **GET /healthz**：包含 Redis 依赖检查，适合作为就绪探针。不要直接作为
+  Kubernetes 存活探针，否则 Redis 故障会导致健康的应用进程被反复重启。
+  当前没有单独提供不依赖外部服务的 HTTP 存活接口。
 
 ## 监控
 
@@ -70,3 +88,4 @@ go run .
 - `HERALD_TOTP_ENCRYPTION_KEY` 需保密且必须正好为 32 字节。
 - 服务间调用使用 API Key 或 HMAC。
 - herald-totp 部署在内网，不要直接暴露公网。
+- 官方容器以非特权用户和用户组 `10001:10001` 运行。

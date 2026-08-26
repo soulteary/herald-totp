@@ -11,6 +11,7 @@
 ### 核心文档
 
 - **[README.zhCN.md](../../README.zhCN.md)** - 项目概述与快速开始
+- **[CHANGELOG.md](../../CHANGELOG.md)** - 发布记录与 v1.0.0 升级说明
 
 ### 详细文档
 
@@ -18,12 +19,14 @@
   - Base URL 与鉴权（API Key / HMAC）
   - POST /v1/enroll/start、POST /v1/enroll/confirm
   - POST /v1/verify（TOTP 或恢复码）
+  - POST /v1/revoke
   - GET /v1/status
   - GET /healthz
   - 错误码与 HTTP 状态码
 
 - **[DEPLOYMENT.md](DEPLOYMENT.md)** - 部署指南
   - 二进制与 Docker 运行
+  - 发布二进制、校验文件与 GHCR 镜像
   - 配置项说明（加密密钥、Redis、TOTP 参数、限流）
   - 与 Stargate 集成
   - 健康检查与监控
@@ -65,6 +68,7 @@
 herald-totp/
 ├── README.md              # 项目主文档（英文）
 ├── README.zhCN.md         # 项目主文档（中文）
+├── CHANGELOG.md           # 发布记录与升级说明
 ├── docs/
 │   ├── enUS/
 │   │   ├── README.md       # 文档索引（英文）
@@ -87,3 +91,4 @@ herald-totp/
 - 配置与 Stargate 集成：[DEPLOYMENT.md](DEPLOYMENT.md)
 - 常见问题：[TROUBLESHOOTING.md](TROUBLESHOOTING.md)
 - 安全：[SECURITY.md](SECURITY.md)
+- 发布与升级：[CHANGELOG.md](../../CHANGELOG.md)

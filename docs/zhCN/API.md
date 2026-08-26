@@ -13,9 +13,35 @@ http://localhost:8084
 当配置了 `API_KEY` 或 `HMAC_SECRET` / `HERALD_TOTP_HMAC_KEYS` 时，调用方（如代理 Stargate 请求的 Herald）必须鉴权：
 
 - **API Key**：请求头 `X-API-Key` 与配置一致。
-- **HMAC**：发送请求头 `X-Timestamp`、`X-Service`、`X-Signature`。当 `HERALD_TOTP_HMAC_KEYS` 包含多个密钥时必须发送 `X-Key-Id`；仅配置一个映射密钥时可省略。签名为 `HMAC-SHA256(secret, timestamp + ":" + service + ":" + body)`。
+- **HMAC**：发送请求头 `X-Timestamp`、`X-Service`、`X-Signature`。时间戳使用 Unix 秒，body 是请求体的原始字节序列（无请求体时为空），签名是 `HMAC-SHA256(secret, timestamp + ":" + service + ":" + body)` 的小写十六进制编码。当 `HERALD_TOTP_HMAC_KEYS` 包含多个密钥时必须发送 `X-Key-Id`；仅配置一个映射密钥时可省略。
 
 若均未配置，则不鉴权（仅开发环境）。
+
+## Go 客户端
+
+受支持的 Go 客户端位于
+`github.com/soulteary/herald-totp/pkg/heraldtotp`：
+
+```go
+opts := heraldtotp.DefaultOptions().
+	WithBaseURL("http://herald-totp:8084").
+	WithAPIKey(os.Getenv("HERALD_TOTP_API_KEY"))
+
+client, err := heraldtotp.NewClient(opts)
+if err != nil {
+	return err
+}
+
+result, err := client.Verify(ctx, &heraldtotp.VerifyRequest{
+	Subject:     "user:12345",
+	Code:        code,
+	ChallengeID: challengeID,
+})
+```
+
+使用映射 HMAC 密钥时，调用 `WithHMACSecret` 和 `WithHMACKeyID`。默认调用方
+服务名为 `stargate`；如需在签名中使用其他调用方身份，可设置
+`Options.Service`。
 
 ## 接口
 
@@ -58,7 +84,10 @@ http://localhost:8084
 ```
 当 `EXPOSE_SECRET_IN_ENROLL=false` 时，不返回 `secret_base32`（仅返回用于二维码的 `otpauth_uri`）。
 
-**错误：** `400` invalid_request，`429` rate_limited，`500` config_error / internal_error。
+再次发起绑定不会覆盖已有凭证。如需有意重新绑定，应先调用
+`POST /v1/revoke`。
+
+**错误：** `400 invalid_request`、`409 already_enrolled`、`409 enrollment_in_progress`、`429 rate_limited`、`500 config_error` 或 `500 internal_error`。
 
 ---
 
@@ -70,6 +99,8 @@ http://localhost:8084
 
 凭证、恢复码哈希和临时绑定记录通过同一个 Redis 事务提交。因此每个 `enroll_id`
 只能确认一次，并且仅在恢复码哈希已成功持久化后才会向调用方返回恢复码。
+确认绑定使用的 TOTP 计数器会被记录为已消费；使用验证器调用 `/v1/verify`
+前应等待进入下一个 TOTP 周期。
 
 **请求体：**
 
@@ -87,7 +118,7 @@ http://localhost:8084
 }
 ```
 
-**错误：** `400` expired（绑定不存在或过期）、invalid（码错误），`500` internal_error。
+**错误：** `400 expired`、`400 invalid`、`409 already_enrolled` 或 `500 internal_error`。
 
 ---
 
@@ -120,13 +151,23 @@ http://localhost:8084
 ```
 使用恢复码验证时，`amr` 为 `["totp", "backup_code"]`。
 
-**错误响应（4xx）：**
+**错误响应：**
 ```json
 {
   "ok": false,
-  "reason": "invalid" | "expired" | "replay" | "rate_limited"
+  "reason": "invalid"
 }
 ```
+
+| 状态码 | Reason | 含义 |
+|--------|--------|------|
+| `400` | `invalid_request` | 缺少必填字段或 JSON 请求体无效。 |
+| `400` | `invalid` | subject 没有已启用的 TOTP 凭证。 |
+| `401` | `invalid` | 提交的 TOTP 或恢复码无效。 |
+| `400` | `replay` | TOTP 计数器或 `challenge_id` 已被消费。 |
+| `429` | `rate_limited` | subject 或来源 IP 超过配置的限流值。 |
+| `500` | `config_error` | 加密配置无效；启动校验通常会阻止进入此状态。 |
+| `500` | `internal_error` | Redis、解密或其他内部操作失败。 |
 
 ---
 
@@ -153,7 +194,7 @@ http://localhost:8084
 }
 ```
 
-**错误：** `400` invalid_request（缺少 subject），`429` rate_limited。
+**错误：** `400 invalid_request`、`429 rate_limited` 或 `500 internal_error`。
 
 ---
 

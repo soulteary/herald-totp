@@ -128,7 +128,7 @@ jobs:
           body: |
             ## Changes
 
-            See [CHANGELOG](CHANGELOG.md) for details.
+            See the [CHANGELOG](https://github.com/${{ github.repository }}/blob/${{ steps.version.outputs.tag }}/CHANGELOG.md) for details and upgrade notes.
 
             ## Downloads
 

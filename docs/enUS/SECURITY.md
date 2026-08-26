@@ -10,7 +10,7 @@ This document describes security considerations and recommendations for herald-t
 
 ## API Key and HMAC
 
-- When **API_KEY** is set, herald-totp requires the `X-API-Key` header to match for all protected endpoints (enroll, verify, status). Use a strong, unique value and keep it secret.
+- When **API_KEY** is set, herald-totp requires the `X-API-Key` header to match for all protected endpoints (enroll, verify, revoke, and status). Use a strong, unique value and keep it secret.
 - Stargate must be configured with the same value as `HERALD_TOTP_API_KEY` so that it sends the key on every request to herald-totp.
 - Alternatively, use **HMAC_SECRET** or **HERALD_TOTP_HMAC_KEYS** (JSON map for key rotation). Stargate must sign requests with the same secret and send `X-Timestamp`, `X-Service`, `X-Signature`, and `X-Key-Id` when the map contains multiple keys. `X-Key-Id` may be omitted only for a single mapped key.
 - Do not log or expose API key or HMAC secrets. Prefer environment variables or a secret manager over config files committed to source control.
@@ -19,9 +19,11 @@ This document describes security considerations and recommendations for herald-t
 
 - **Network**: Run herald-totp in a private network. Only Stargate (or your gateway) should call it; do not expose herald-totp directly to the public internet unless behind HTTPS and strict access control.
 - **HTTPS**: If herald-totp is reachable over the internet or across untrusted networks, put it behind a reverse proxy (e.g. Traefik, nginx) with TLS. Stargate should use `https://` for `HERALD_TOTP_BASE_URL` in that case.
-- **Least privilege**: Run the process with a non-root user; in Docker, use a non-root user in the image if possible.
+- **Least privilege**: Run the process with a non-root user. The official container is configured as the numeric user and group `10001:10001`.
 - **Redis**: Use a dedicated Redis instance or DB index for herald-totp. Enable Redis AUTH and TLS when available. Do not expose Redis to the public.
 - **Logging**: Avoid logging request bodies or headers that may contain TOTP codes or backup codes. Structured logs (e.g. subject, result, reason) are sufficient for operations and troubleshooting.
+- **Enrollment response**: Set `EXPOSE_SECRET_IN_ENROLL=false` in production when manual secret entry is not required. The `otpauth_uri` still contains the secret and must be handled as sensitive data.
+- **Metrics**: `/metrics` is intentionally unauthenticated. Restrict it at the network or reverse-proxy layer and do not expose it publicly.
 
 ## Replay Protection
 
