@@ -30,7 +30,7 @@
 ## Run
 
 ```bash
-export HERALD_TOTP_ENCRYPTION_KEY="your-32-byte-secret-key-here!!"
+export HERALD_TOTP_ENCRYPTION_KEY="$(openssl rand -base64 24)"
 go run .
 ```
 
@@ -59,6 +59,6 @@ Or use the [.env.example](../.env.example) and run with your process manager / D
 
 ## Security
 
-- Keep `HERALD_TOTP_ENCRYPTION_KEY` secret and at least 32 bytes.
+- Keep `HERALD_TOTP_ENCRYPTION_KEY` secret and exactly 32 bytes.
 - Use API key or HMAC for service-to-service calls.
 - Run herald-totp in a private network; do not expose it to the public internet.

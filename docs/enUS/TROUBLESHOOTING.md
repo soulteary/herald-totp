@@ -21,11 +21,11 @@ This guide helps you diagnose and resolve common issues with herald-totp.
 
 ### Cause
 
-At startup, herald-totp checks that `HERALD_TOTP_ENCRYPTION_KEY` is set and at least 32 bytes. If it is missing or too short, the service logs a warning and enroll/verify operations will fail with config_error.
+At startup, herald-totp checks that `HERALD_TOTP_ENCRYPTION_KEY` is exactly 32 bytes. If its length is invalid, the service logs a warning and enroll/verify operations fail with config_error.
 
 ### Solutions
 
-1. Set `HERALD_TOTP_ENCRYPTION_KEY` to a 32-byte value (e.g. 32 ASCII characters or 64 hex characters decoded to 32 bytes). Restart the process or container.
+1. Set `HERALD_TOTP_ENCRYPTION_KEY` to exactly 32 bytes. `openssl rand -base64 24` can generate a 32-character value. Restart the process or container.
 2. Confirm the variable is actually present in the runtime (no typo in env name; in Docker/Kubernetes it is passed correctly).
 3. Check logs at startup: if the key is missing or short, herald-totp logs that enroll/verify will fail.
 
