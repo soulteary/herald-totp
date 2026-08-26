@@ -1,6 +1,6 @@
 module github.com/soulteary/herald-totp
 
-go 1.26.6
+go 1.27.0
 
 require (
 	github.com/alicebob/miniredis/v2 v2.36.1
@@ -10,14 +10,14 @@ require (
 	github.com/prometheus/client_model v0.6.2
 	github.com/pterm/pterm v0.12.83
 	github.com/redis/go-redis/v9 v9.22.0
-	github.com/soulteary/cli-kit v1.7.0
-	github.com/soulteary/health-kit/v2 v2.0.0
-	github.com/soulteary/logger-kit/v2 v2.0.0
-	github.com/soulteary/metrics-kit/v2 v2.0.0
-	github.com/soulteary/middleware-kit/v2 v2.0.0
-	github.com/soulteary/redis-kit v1.4.0
-	github.com/soulteary/secure-kit v1.4.0
-	github.com/soulteary/version-kit/v2 v2.0.0
+	github.com/soulteary/cli-kit v1.8.0
+	github.com/soulteary/health-kit/v2 v2.1.0
+	github.com/soulteary/logger-kit/v2 v2.1.0
+	github.com/soulteary/metrics-kit/v2 v2.1.0
+	github.com/soulteary/middleware-kit/v2 v2.1.0
+	github.com/soulteary/redis-kit v1.5.0
+	github.com/soulteary/secure-kit v1.5.0
+	github.com/soulteary/version-kit/v2 v2.1.0
 )
 
 require (
