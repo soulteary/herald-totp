@@ -14,6 +14,10 @@
 | REDIS_ADDR | localhost:6379 | Redis address. |
 | REDIS_PASSWORD | | Redis password. |
 | REDIS_DB | 0 | Redis DB number. |
+| REDIS_TLS_ENABLED | false | Connect to Redis over TLS. |
+| REDIS_TLS_SERVER_NAME | | Expected Redis certificate server name. |
+| REDIS_TLS_CA_FILE | | Optional PEM CA bundle for Redis. |
+| REDIS_TLS_INSECURE_SKIP_VERIFY | false | Disable certificate verification; local diagnostics only. |
 | TOTP_ISSUER | Herald | Issuer name in otpauth URI. |
 | TOTP_PERIOD | 30 | TOTP period (seconds). |
 | TOTP_DIGITS | 6 | TOTP digit count. |
@@ -33,6 +37,11 @@
 export HERALD_TOTP_ENCRYPTION_KEY="$(openssl rand -base64 24)"
 go run .
 ```
+
+For Redis TLS, enable `REDIS_TLS_ENABLED`, set `REDIS_TLS_SERVER_NAME` to the
+certificate name, and optionally provide a private CA bundle through
+`REDIS_TLS_CA_FILE`. Keep `REDIS_TLS_INSECURE_SKIP_VERIFY=false` in deployed
+environments.
 
 Or use the [.env.example](../.env.example) and run with your process manager / Docker.
 

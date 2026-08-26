@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"testing"
 
 	"github.com/alicebob/miniredis/v2"
@@ -50,6 +51,22 @@ func TestSetup(t *testing.T) {
 	}
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("GET /healthz status = %d, want 200", resp.StatusCode)
+	}
+}
+
+func TestSetup_RedisTLSConfigError(t *testing.T) {
+	oldEnabled := config.RedisTLSEnabled
+	oldCAFile := config.RedisTLSCAFile
+	config.RedisTLSEnabled = true
+	config.RedisTLSCAFile = filepath.Join(t.TempDir(), "missing-ca.pem")
+	defer func() {
+		config.RedisTLSEnabled = oldEnabled
+		config.RedisTLSCAFile = oldCAFile
+	}()
+
+	log := logger.New(logger.Config{Level: logger.Disabled})
+	if _, err := Setup(fiber.New(), log); err == nil {
+		t.Fatal("Setup with missing Redis TLS CA: expected error")
 	}
 }
 
