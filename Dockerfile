@@ -16,7 +16,10 @@ RUN BUILD_DATE=${BUILD_DATE:-$(date +%FT%T%z)} && \
 
 # Runtime stage
 FROM alpine:3.23
-RUN apk add --no-cache ca-certificates curl
-COPY --from=builder /app/herald-totp /bin/herald-totp
+RUN apk add --no-cache ca-certificates && \
+    addgroup -S -g 10001 herald && \
+    adduser -S -D -H -u 10001 -G herald herald
+COPY --from=builder --chown=herald:herald /app/herald-totp /bin/herald-totp
+USER 10001:10001
 EXPOSE 8084
 CMD ["herald-totp"]

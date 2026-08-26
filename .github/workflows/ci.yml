@@ -199,6 +199,7 @@ jobs:
         run: |
           docker images herald-totp:test
           docker inspect herald-totp:test
+          test "$(docker inspect --format '{{.Config.User}}' herald-totp:test)" = "10001:10001"
 
   # Full build check
   build:
