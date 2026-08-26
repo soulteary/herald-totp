@@ -10,7 +10,7 @@
 
 TOTP 2FA service for the Herald/Stargate stack: **enroll** (bind), **verify**, and optional **backup codes**. It does not send codes; users generate TOTP in an authenticator app (e.g. Google Authenticator). Stargate calls herald-totp for per-user TOTP instead of a single global secret.
 
-The HTTP server uses Fiber v3.4.0 and the matching v2 module lines of the Fiber-facing kit packages. Building from source requires Go 1.26 or later.
+The HTTP server currently uses Fiber v3.5.0 and the matching v2 module lines of the Fiber-facing kit packages. Building from source requires Go 1.26 or later; `go.mod` is the authoritative source for exact dependency versions.
 
 ## Core Features
 
