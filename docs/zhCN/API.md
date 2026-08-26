@@ -83,7 +83,7 @@ http://localhost:8084
 {
   "subject": "user:12345",
   "totp_enabled": true,
-  "backup_codes": ["ABCD-EFGH", "WXYZ-1234", ...]
+  "backup_codes": ["ABCD-EFGH-JKLM-NPQR", "WXYZ-2345-6789-ABCD", ...]
 }
 ```
 
@@ -102,7 +102,7 @@ http://localhost:8084
 | 字段         | 类型   | 必填 | 说明                                |
 |--------------|--------|------|-------------------------------------|
 | subject      | string | 是  | 用户标识。                          |
-| code         | string | 是  | 6 位 TOTP 或恢复码（如 ABCD-EFGH）。 |
+| code         | string | 是  | 6 位 TOTP 或恢复码（如 ABCD-EFGH-JKLM-NPQR）。 |
 | challenge_id | string | 否  | 可选；用于防重放/审计（一次性）。   |
 
 服务会记录 `TOTP_SKEW` 容差窗口内实际匹配的 TOTP 时间步，并在 Redis 中原子认领。

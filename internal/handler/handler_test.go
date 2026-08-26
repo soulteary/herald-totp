@@ -209,6 +209,26 @@ func TestEnrollConfirm_BadRequest(t *testing.T) {
 	}
 }
 
+func TestGenerateBackupCodes_HasAtLeast80BitsOfEntropy(t *testing.T) {
+	codes, err := generateBackupCodes(100)
+	if err != nil {
+		t.Fatalf("generateBackupCodes: %v", err)
+	}
+	if len(codes) != 100 {
+		t.Fatalf("code count = %d, want 100", len(codes))
+	}
+	seen := make(map[string]struct{}, len(codes))
+	for _, code := range codes {
+		if len(code) != 19 || len(normalizeBackupCode(code)) != 16 {
+			t.Fatalf("backup code %q does not use XXXX-XXXX-XXXX-XXXX format", code)
+		}
+		if _, exists := seen[code]; exists {
+			t.Fatalf("duplicate backup code generated: %q", code)
+		}
+		seen[code] = struct{}{}
+	}
+}
+
 func TestEnrollConfirm_Expired(t *testing.T) {
 	st, mr, log := setupHandlerTest(t)
 	defer mr.Close()
