@@ -181,7 +181,12 @@ func EnrollConfirm(st *store.Store, log *logger.Logger) fiber.Handler {
 			UpdatedAt:    now.Unix(),
 		}
 		// Generate and persist backup codes as part of the enrollment transaction.
-		backupCodes := generateBackupCodes(10)
+		backupCodes, err := generateBackupCodes(10)
+		if err != nil {
+			log.Warn().Err(err).Msg("enroll confirm: backup code generation failed")
+			metrics.RecordEnrollConfirm("failure")
+			return respondInternalError(c)
+		}
 		entries := make([]store.BackupCodeEntry, len(backupCodes))
 		for i, code := range backupCodes {
 			entries[i] = store.BackupCodeEntry{CodeHash: secure.GetSHA256Hash(normalizeBackupCode(code)), UsedAt: 0}
@@ -210,20 +215,27 @@ func EnrollConfirm(st *store.Store, log *logger.Logger) fiber.Handler {
 	}
 }
 
-// normalizeBackupCode uppercases and removes dash (ABCD-EFGH -> ABCDEFGH).
+// normalizeBackupCode uppercases and removes separators.
 func normalizeBackupCode(code string) string {
 	return strings.ToUpper(strings.ReplaceAll(strings.TrimSpace(code), "-", ""))
 }
 
-// generateBackupCodes returns n human-readable backup codes (e.g. ABCD-EFGH).
-func generateBackupCodes(n int) []string {
+// generateBackupCodes returns n human-readable backup codes. Each code carries
+// 80 bits of entropy as four groups of four unambiguous Base32 characters.
+func generateBackupCodes(n int) ([]string, error) {
 	const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 	const partLen = 4
 	out := make([]string, n)
 	for i := 0; i < n; i++ {
-		p1, _ := secure.RandomString(partLen, chars)
-		p2, _ := secure.RandomString(partLen, chars)
-		out[i] = p1 + "-" + p2
+		parts := make([]string, 4)
+		for j := range parts {
+			part, err := secure.RandomString(partLen, chars)
+			if err != nil {
+				return nil, err
+			}
+			parts[j] = part
+		}
+		out[i] = strings.Join(parts, "-")
 	}
-	return out
+	return out, nil
 }
