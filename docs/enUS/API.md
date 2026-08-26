@@ -84,7 +84,7 @@ and backup codes are never returned unless their hashes were persisted.
 {
   "subject": "user:12345",
   "totp_enabled": true,
-  "backup_codes": ["ABCD-EFGH", "WXYZ-1234", ...]
+  "backup_codes": ["ABCD-EFGH-JKLM-NPQR", "WXYZ-2345-6789-ABCD", ...]
 }
 ```
 
@@ -103,7 +103,7 @@ Verify a TOTP code (or backup code) for login.
 | Field        | Type   | Required | Description                                |
 |-------------|--------|----------|--------------------------------------------|
 | subject     | string | Yes      | User identifier.                          |
-| code        | string | Yes      | 6-digit TOTP or backup code (e.g. ABCD-EFGH). |
+| code        | string | Yes      | 6-digit TOTP or backup code (e.g. ABCD-EFGH-JKLM-NPQR). |
 | challenge_id| string | No       | Optional; for replay/audit (one-time use). |
 
 The service records the exact TOTP time step matched within `TOTP_SKEW` and
