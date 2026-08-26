@@ -12,7 +12,7 @@ This document describes security considerations and recommendations for herald-t
 
 - When **API_KEY** is set, herald-totp requires the `X-API-Key` header to match for all protected endpoints (enroll, verify, status). Use a strong, unique value and keep it secret.
 - Stargate must be configured with the same value as `HERALD_TOTP_API_KEY` so that it sends the key on every request to herald-totp.
-- Alternatively, use **HMAC_SECRET** or **HERALD_TOTP_HMAC_KEYS** (JSON map for key rotation). Stargate must sign requests with the same secret and send `X-Timestamp`, `X-Service`, `X-Signature` (and optionally `X-Key-Id`).
+- Alternatively, use **HMAC_SECRET** or **HERALD_TOTP_HMAC_KEYS** (JSON map for key rotation). Stargate must sign requests with the same secret and send `X-Timestamp`, `X-Service`, `X-Signature`, and `X-Key-Id` when the map contains multiple keys. `X-Key-Id` may be omitted only for a single mapped key.
 - Do not log or expose API key or HMAC secrets. Prefer environment variables or a secret manager over config files committed to source control.
 
 ## Production Recommendations

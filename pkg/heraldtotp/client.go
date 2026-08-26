@@ -21,6 +21,7 @@ type Client struct {
 	baseURL    string
 	apiKey     string
 	hmacSecret string
+	hmacKeyID  string
 	service    string
 }
 
@@ -29,6 +30,7 @@ type Options struct {
 	BaseURL    string
 	APIKey     string
 	HMACSecret string
+	HMACKeyID  string
 	Service    string
 	Timeout    time.Duration
 }
@@ -59,6 +61,12 @@ func (o *Options) WithHMACSecret(s string) *Options {
 	return o
 }
 
+// WithHMACKeyID sets the key ID sent with HMAC-authenticated requests.
+func (o *Options) WithHMACKeyID(keyID string) *Options {
+	o.HMACKeyID = keyID
+	return o
+}
+
 // WithTimeout sets the timeout.
 func (o *Options) WithTimeout(d time.Duration) *Options {
 	o.Timeout = d
@@ -78,6 +86,7 @@ func NewClient(opts *Options) (*Client, error) {
 		baseURL:    opts.BaseURL,
 		apiKey:     opts.APIKey,
 		hmacSecret: opts.HMACSecret,
+		hmacKeyID:  opts.HMACKeyID,
 		service:    opts.Service,
 	}, nil
 }
@@ -290,6 +299,9 @@ func (c *Client) addAuthHeaders(req *http.Request, body []byte) {
 		req.Header.Set("X-Timestamp", timestamp)
 		req.Header.Set("X-Service", c.service)
 		req.Header.Set("X-Signature", signature)
+		if c.hmacKeyID != "" {
+			req.Header.Set("X-Key-Id", c.hmacKeyID)
+		}
 	}
 }
 
