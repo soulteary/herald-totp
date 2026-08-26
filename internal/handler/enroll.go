@@ -165,14 +165,14 @@ func EnrollConfirm(st *store.Store, log *logger.Logger) fiber.Handler {
 
 		now := time.Now()
 		cred := &store.Credential{
-			Subject:      e.Subject,
-			SecretEnc:    e.SecretEnc,
-			Issuer:       e.Issuer,
-			Label:        e.Label,
-			Period:       e.Period,
-			Digits:       e.Digits,
-			Algo:         "SHA1",
-			Enabled:      true,
+			Subject:   e.Subject,
+			SecretEnc: e.SecretEnc,
+			Issuer:    e.Issuer,
+			Label:     e.Label,
+			Period:    e.Period,
+			Digits:    e.Digits,
+			Algo:      "SHA1",
+			Enabled:   true,
 			// The code used to confirm enrollment is itself a consumed TOTP
 			// value. Persist its matched counter so it cannot be reused for an
 			// immediate verification request in the same time window.
