@@ -277,6 +277,44 @@ func TestConfirmEnrollment_PreIndexRecord(t *testing.T) {
 	}
 }
 
+func TestConfirmEnrollment_PreIndexRecordBlockedAfterRevocation(t *testing.T) {
+	st, mr := newTestStore(t)
+	defer mr.Close()
+	ctx := context.Background()
+	enrollment := &Enrollment{
+		EnrollID: "e_legacy_revoked", Subject: "legacy-revoked", SecretEnc: "legacy-secret",
+	}
+	data, err := json.Marshal(enrollment)
+	if err != nil {
+		t.Fatalf("marshal enrollment: %v", err)
+	}
+	if err := st.rdb.Set(ctx, enrollPrefix+enrollment.EnrollID, data, st.enrollTTL).Err(); err != nil {
+		t.Fatalf("store pre-index enrollment: %v", err)
+	}
+
+	if err := st.DeleteSubject(ctx, enrollment.Subject); err != nil {
+		t.Fatalf("DeleteSubject: %v", err)
+	}
+	confirmed, err := st.ConfirmEnrollment(ctx, enrollment, &Credential{
+		Subject: enrollment.Subject, SecretEnc: enrollment.SecretEnc,
+	}, nil)
+	if err != nil || confirmed {
+		t.Fatalf("ConfirmEnrollment(revoked pre-index) = (%v, %v), want false, nil", confirmed, err)
+	}
+	if got, err := st.GetCredential(ctx, enrollment.Subject); err != nil || got != nil {
+		t.Fatalf("credential after revoked legacy confirmation = (%+v, %v)", got, err)
+	}
+
+	if err := st.SaveEnrollment(ctx, &Enrollment{
+		EnrollID: "e_after_legacy_revoke", Subject: enrollment.Subject, SecretEnc: "new-secret",
+	}); err != nil {
+		t.Fatalf("new enrollment after legacy revoke: %v", err)
+	}
+	if n, err := st.rdb.Exists(ctx, enrollRevokedPrefix+enrollment.Subject).Result(); err != nil || n != 0 {
+		t.Fatalf("revocation tombstone after new enrollment = (%d, %v), want 0, nil", n, err)
+	}
+}
+
 func TestConfirmEnrollment_PreIndexRecordDoesNotReplaceNewerEnrollment(t *testing.T) {
 	st, mr := newTestStore(t)
 	defer mr.Close()
