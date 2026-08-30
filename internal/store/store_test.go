@@ -2,8 +2,8 @@ package store
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -140,10 +140,17 @@ func TestSaveGetEnrollment(t *testing.T) {
 	if got != nil {
 		t.Errorf("GetEnrollment(none) = %v, want nil", got)
 	}
-	_ = st.DeleteEnrollment(ctx, "e_abc")
+	if err := st.DeleteEnrollment(ctx, "e_abc"); err != nil {
+		t.Fatalf("DeleteEnrollment: %v", err)
+	}
 	got, _ = st.GetEnrollment(ctx, "e_abc")
 	if got != nil {
 		t.Errorf("GetEnrollment after Delete = %v, want nil", got)
+	}
+	if err := st.SaveEnrollment(ctx, &Enrollment{
+		EnrollID: "e_replacement", Subject: e.Subject, SecretEnc: "enc2",
+	}); err != nil {
+		t.Fatalf("new enrollment after DeleteEnrollment: %v", err)
 	}
 }
 
@@ -247,179 +254,34 @@ func TestConfirmEnrollment(t *testing.T) {
 	}
 }
 
-func TestConfirmEnrollment_PreIndexRecord(t *testing.T) {
+func TestConfirmEnrollment_PreIndexRecordFailsClosed(t *testing.T) {
 	st, mr := newTestStore(t)
 	defer mr.Close()
 	ctx := context.Background()
 	enrollment := &Enrollment{
-		EnrollID: "e_pre_index", Subject: "upgrade-user", SecretEnc: "secret",
-		Period: 30, Digits: 6,
+		EnrollID: "e_pre_index", Subject: "upgrade-user", SecretEnc: "legacy-secret",
+		Period: 30, Digits: 6, CreatedAt: time.Now().Unix(),
 	}
 	data, err := json.Marshal(enrollment)
 	if err != nil {
 		t.Fatalf("marshal enrollment: %v", err)
 	}
-	// Simulate a record written by a version that predates enroll_subject keys.
+	// Simulate a record written by a version that predates subject indexes.
 	if err := st.rdb.Set(ctx, enrollPrefix+enrollment.EnrollID, data, st.enrollTTL).Err(); err != nil {
 		t.Fatalf("seed pre-index enrollment: %v", err)
 	}
 
-	credential := &Credential{
-		Subject: enrollment.Subject, SecretEnc: enrollment.SecretEnc,
-		Period: 30, Digits: 6, Enabled: true,
-	}
-	confirmed, err := st.ConfirmEnrollment(ctx, enrollment, credential, nil)
-	if err != nil || !confirmed {
-		t.Fatalf("ConfirmEnrollment(pre-index) = (%v, %v), want true", confirmed, err)
-	}
-	if got, err := st.GetCredential(ctx, enrollment.Subject); err != nil || got == nil {
-		t.Fatalf("credential after upgrade confirmation = (%+v, %v)", got, err)
-	}
-}
-
-func TestConfirmEnrollment_PreIndexRecordBlockedAfterRevocation(t *testing.T) {
-	st, mr := newTestStore(t)
-	defer mr.Close()
-	ctx := context.Background()
-	enrollment := &Enrollment{
-		EnrollID: "e_legacy_revoked", Subject: "legacy-revoked", SecretEnc: "legacy-secret",
-	}
-	data, err := json.Marshal(enrollment)
-	if err != nil {
-		t.Fatalf("marshal enrollment: %v", err)
-	}
-	if err := st.rdb.Set(ctx, enrollPrefix+enrollment.EnrollID, data, 3*st.enrollTTL).Err(); err != nil {
-		t.Fatalf("store pre-index enrollment: %v", err)
-	}
-
-	if err := st.DeleteSubject(ctx, enrollment.Subject); err != nil {
-		t.Fatalf("DeleteSubject: %v", err)
-	}
-	mr.FastForward(st.enrollTTL + time.Second)
-	if n, err := st.rdb.Exists(ctx, enrollPrefix+enrollment.EnrollID).Result(); err != nil || n != 1 {
-		t.Fatalf("legacy enrollment after configured TTL = (%d, %v), want 1, nil", n, err)
-	}
 	confirmed, err := st.ConfirmEnrollment(ctx, enrollment, &Credential{
 		Subject: enrollment.Subject, SecretEnc: enrollment.SecretEnc,
 	}, nil)
 	if err != nil || confirmed {
-		t.Fatalf("ConfirmEnrollment(revoked pre-index) = (%v, %v), want false, nil", confirmed, err)
+		t.Fatalf("ConfirmEnrollment(pre-index) = (%v, %v), want false, nil", confirmed, err)
 	}
 	if got, err := st.GetCredential(ctx, enrollment.Subject); err != nil || got != nil {
-		t.Fatalf("credential after revoked legacy confirmation = (%+v, %v)", got, err)
+		t.Fatalf("credential after pre-index confirmation = (%+v, %v), want nil, nil", got, err)
 	}
-
-	replacement := &Enrollment{
-		EnrollID: "e_after_legacy_revoke", Subject: enrollment.Subject, SecretEnc: "new-secret",
-	}
-	if err := st.SaveEnrollment(ctx, replacement); err != nil {
-		t.Fatalf("new enrollment after legacy revoke: %v", err)
-	}
-	if n, err := st.rdb.Exists(ctx, enrollRevokedPrefix+enrollment.Subject).Result(); err != nil || n != 1 {
-		t.Fatalf("revocation tombstone after new enrollment = (%d, %v), want 1, nil", n, err)
-	}
-	mr.FastForward(st.enrollTTL + time.Second)
-	if n, err := st.rdb.Exists(ctx, enrollPrefix+enrollment.EnrollID).Result(); err != nil || n != 1 {
-		t.Fatalf("legacy enrollment after replacement expiry = (%d, %v), want 1, nil", n, err)
-	}
-	confirmed, err = st.ConfirmEnrollment(ctx, enrollment, &Credential{
-		Subject: enrollment.Subject, SecretEnc: enrollment.SecretEnc,
-	}, nil)
-	if err != nil || confirmed {
-		t.Fatalf("ConfirmEnrollment(after replacement expiry) = (%v, %v), want false, nil", confirmed, err)
-	}
-
-	replacement = &Enrollment{
-		EnrollID: "e_authorized_replacement", Subject: enrollment.Subject, SecretEnc: "authorized-secret",
-	}
-	if err := st.SaveEnrollment(ctx, replacement); err != nil {
-		t.Fatalf("authorized replacement enrollment: %v", err)
-	}
-	confirmed, err = st.ConfirmEnrollment(ctx, replacement, &Credential{
-		Subject: replacement.Subject, SecretEnc: replacement.SecretEnc,
-	}, nil)
-	if err != nil || !confirmed {
-		t.Fatalf("ConfirmEnrollment(indexed replacement) = (%v, %v), want true, nil", confirmed, err)
-	}
-}
-
-func TestConfirmEnrollment_PreIndexRecordCreatedAfterRevocation(t *testing.T) {
-	st, mr := newTestStore(t)
-	defer mr.Close()
-	ctx := context.Background()
-	subject := "rolling-upgrade-reenroll"
-
-	if err := st.DeleteSubject(ctx, subject); err != nil {
-		t.Fatalf("DeleteSubject: %v", err)
-	}
-	marker, err := st.rdb.Get(ctx, enrollRevokedPrefix+subject).Result()
-	if err != nil {
-		t.Fatalf("get revocation marker: %v", err)
-	}
-	revokedAt, valid := revocationTime(marker)
-	if !valid {
-		t.Fatalf("invalid revocation marker %q", marker)
-	}
-
-	// Simulate an old instance writing without the subject index in the same
-	// second as the revoke. Ambiguous ordering fails closed.
-	atBoundary := &Enrollment{
-		EnrollID: "e_legacy_at_revoke", Subject: subject, SecretEnc: "boundary-secret", CreatedAt: revokedAt,
-	}
-	data, err := json.Marshal(atBoundary)
-	if err != nil {
-		t.Fatalf("marshal boundary enrollment: %v", err)
-	}
-	if err := st.rdb.Set(ctx, enrollPrefix+atBoundary.EnrollID, data, st.enrollTTL).Err(); err != nil {
-		t.Fatalf("seed boundary enrollment: %v", err)
-	}
-	confirmed, err := st.ConfirmEnrollment(ctx, atBoundary, &Credential{
-		Subject: subject, SecretEnc: atBoundary.SecretEnc,
-	}, nil)
-	if err != nil || confirmed {
-		t.Fatalf("ConfirmEnrollment(at revoke) = (%v, %v), want false, nil", confirmed, err)
-	}
-
-	// A later legacy write is a deliberate re-enrollment that happened after
-	// revocation and remains confirmable during the rolling deployment.
-	after := &Enrollment{
-		EnrollID: "e_legacy_after_revoke", Subject: subject, SecretEnc: "new-secret", CreatedAt: revokedAt + 1,
-	}
-	data, err = json.Marshal(after)
-	if err != nil {
-		t.Fatalf("marshal post-revoke enrollment: %v", err)
-	}
-	if err := st.rdb.Set(ctx, enrollPrefix+after.EnrollID, data, st.enrollTTL).Err(); err != nil {
-		t.Fatalf("seed post-revoke enrollment: %v", err)
-	}
-	confirmed, err = st.ConfirmEnrollment(ctx, after, &Credential{
-		Subject: subject, SecretEnc: after.SecretEnc,
-	}, nil)
-	if err != nil || !confirmed {
-		t.Fatalf("ConfirmEnrollment(after revoke) = (%v, %v), want true, nil", confirmed, err)
-	}
-}
-
-func TestConfirmEnrollment_PreIndexRecordDoesNotReplaceNewerEnrollment(t *testing.T) {
-	st, mr := newTestStore(t)
-	defer mr.Close()
-	ctx := context.Background()
-	oldEnrollment := &Enrollment{EnrollID: "e_old", Subject: "upgrade-race", SecretEnc: "old"}
-	data, _ := json.Marshal(oldEnrollment)
-	if err := st.rdb.Set(ctx, enrollPrefix+oldEnrollment.EnrollID, data, st.enrollTTL).Err(); err != nil {
-		t.Fatalf("seed old enrollment: %v", err)
-	}
-	if err := st.SaveEnrollment(ctx, &Enrollment{
-		EnrollID: "e_new", Subject: oldEnrollment.Subject, SecretEnc: "new",
-	}); err != nil {
-		t.Fatalf("SaveEnrollment(new): %v", err)
-	}
-
-	confirmed, err := st.ConfirmEnrollment(ctx, oldEnrollment, &Credential{
-		Subject: oldEnrollment.Subject, SecretEnc: oldEnrollment.SecretEnc,
-	}, nil)
-	if err != nil || confirmed {
-		t.Fatalf("ConfirmEnrollment(old) = (%v, %v), want false, nil", confirmed, err)
+	if got, err := st.GetEnrollment(ctx, enrollment.EnrollID); err != nil || got == nil {
+		t.Fatalf("pre-index enrollment should remain available for migration handling: (%+v, %v)", got, err)
 	}
 }
 
@@ -457,6 +319,100 @@ func TestConfirmEnrollment_Concurrent(t *testing.T) {
 	wg.Wait()
 	if got := successes.Load(); got != 1 {
 		t.Fatalf("successful confirmations = %d, want 1", got)
+	}
+}
+
+func TestClaimCredentialStepAndChallenge_ConcurrentDifferentSteps(t *testing.T) {
+	st, mr := newTestStore(t)
+	defer mr.Close()
+	ctx := context.Background()
+	const subject = "atomic-totp"
+	const challengeID = "shared-totp-challenge"
+	if err := st.SaveCredential(ctx, &Credential{Subject: subject, Enabled: true}); err != nil {
+		t.Fatalf("SaveCredential: %v", err)
+	}
+
+	const workers = 16
+	start := make(chan struct{})
+	var successes atomic.Int32
+	var wg sync.WaitGroup
+	for i := 1; i <= workers; i++ {
+		step := int64(i)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			claimed, err := st.ClaimCredentialStepAndChallenge(ctx, subject, step, step, challengeID)
+			if err != nil {
+				t.Errorf("ClaimCredentialStepAndChallenge: %v", err)
+				return
+			}
+			if claimed {
+				successes.Add(1)
+			}
+		}()
+	}
+	close(start)
+	wg.Wait()
+	if got := successes.Load(); got != 1 {
+		t.Fatalf("successful atomic TOTP claims = %d, want 1", got)
+	}
+	if used, err := st.IsChallengeUsed(ctx, challengeID); err != nil || !used {
+		t.Fatalf("challenge used = (%v, %v), want true", used, err)
+	}
+}
+
+func TestConsumeBackupCodeAndClaimChallenge_ConcurrentDifferentCodes(t *testing.T) {
+	st, mr := newTestStore(t)
+	defer mr.Close()
+	ctx := context.Background()
+	const subject = "atomic-backup"
+	const challengeID = "shared-backup-challenge"
+	const workers = 16
+	entries := make([]BackupCodeEntry, workers)
+	for i := range entries {
+		entries[i].CodeHash = fmt.Sprintf("hash-%d", i)
+	}
+	if err := st.SaveBackupCodes(ctx, subject, entries); err != nil {
+		t.Fatalf("SaveBackupCodes: %v", err)
+	}
+
+	start := make(chan struct{})
+	var successes atomic.Int32
+	var wg sync.WaitGroup
+	for i := range workers {
+		hash := entries[i].CodeHash
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			consumed, err := st.ConsumeBackupCodeAndClaimChallenge(ctx, subject, hash, challengeID)
+			if err != nil {
+				t.Errorf("ConsumeBackupCodeAndClaimChallenge: %v", err)
+				return
+			}
+			if consumed {
+				successes.Add(1)
+			}
+		}()
+	}
+	close(start)
+	wg.Wait()
+	if got := successes.Load(); got != 1 {
+		t.Fatalf("successful atomic backup claims = %d, want 1", got)
+	}
+	got, err := st.GetBackupCodes(ctx, subject)
+	if err != nil {
+		t.Fatalf("GetBackupCodes: %v", err)
+	}
+	usedCodes := 0
+	for _, entry := range got {
+		if entry.UsedAt != 0 {
+			usedCodes++
+		}
+	}
+	if usedCodes != 1 {
+		t.Fatalf("consumed backup codes = %d, want 1", usedCodes)
 	}
 }
 

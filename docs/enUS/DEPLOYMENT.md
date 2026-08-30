@@ -37,10 +37,23 @@ opening the listen socket or initializing Redis.
 
 ## Run
 
+Generate the encryption key **once**, store it in your secret manager, and reuse
+the same value on every start:
+
 ```bash
-export HERALD_TOTP_ENCRYPTION_KEY="$(openssl rand -base64 24)"
+# One-time provisioning; do not put this command in a restart script.
+(umask 077; openssl rand -base64 24 | tr -d '\n' > herald-totp-encryption-key)
+# Import this file into your secret manager, then remove the local copy safely.
+
+# Every service start reads the already-provisioned value.
+export HERALD_TOTP_ENCRYPTION_KEY="<value loaded from the secret manager>"
 go run .
 ```
+
+Changing or losing this key makes every existing encrypted TOTP credential
+undecryptable. Online key rotation is not currently supported: preserve the
+original key in backups and plan a user re-enrollment migration before replacing
+it.
 
 For Redis TLS, enable `REDIS_TLS_ENABLED`, set `REDIS_TLS_SERVER_NAME` to the
 certificate name, and optionally provide a private CA bundle through

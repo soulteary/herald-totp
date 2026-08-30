@@ -5,8 +5,6 @@ import (
 	"crypto/subtle"
 	"encoding/json"
 	"errors"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -16,8 +14,6 @@ const (
 	credPrefix          = "totp:cred:"
 	enrollPrefix        = "totp:enroll:"
 	enrollSubjectPrefix = "totp:enroll_subject:"
-	enrollRevokedPrefix = "totp:enroll_revoked:"
-	revocationMarkerV1  = "v1:"
 	backupPrefix        = "totp:backup:"
 	chUsedPrefix        = "totp:ch_used:"
 	rateSubjectPrefix   = "totp:rate:subject:"
@@ -54,14 +50,19 @@ redis.call("SET", KEYS[3], ARGV[3], "PX", ARGV[2])
 return 1
 `)
 
+var deleteEnrollmentScript = redis.NewScript(`
+if redis.call("GET", KEYS[2]) == ARGV[1] then
+  return redis.call("DEL", KEYS[1], KEYS[2])
+end
+return redis.call("DEL", KEYS[1])
+`)
+
 var deleteSubjectScript = redis.NewScript(`
 local enrollID = redis.call("GET", KEYS[3])
 if enrollID then
   redis.call("DEL", ARGV[1] .. enrollID)
 end
-local deleted = redis.call("DEL", KEYS[1], KEYS[2], KEYS[3])
-redis.call("SET", KEYS[4], ARGV[2])
-return deleted
+return redis.call("DEL", KEYS[1], KEYS[2], KEYS[3])
 `)
 
 // Credential is the persisted TOTP credential for a subject.
@@ -133,15 +134,28 @@ func (s *Store) SaveCredential(ctx context.Context, c *Credential) error {
 	return s.rdb.Set(ctx, key, data, 0).Err()
 }
 
-// ClaimCredentialStep advances a credential's last-used TOTP counter with an
-// optimistic Redis transaction. It returns false when the counter was already
-// used, so concurrent requests cannot both accept the same TOTP code.
+// ClaimCredentialStep advances a credential's last-used TOTP counter.
 func (s *Store) ClaimCredentialStep(ctx context.Context, subject string, step, updatedAt int64) (bool, error) {
-	key := credPrefix + subject
+	return s.ClaimCredentialStepAndChallenge(ctx, subject, step, updatedAt, "")
+}
+
+// ClaimCredentialStepAndChallenge atomically advances the TOTP counter and,
+// when supplied, claims the challenge. Neither value changes if either one was
+// already consumed.
+func (s *Store) ClaimCredentialStepAndChallenge(
+	ctx context.Context, subject string, step, updatedAt int64, challengeID string,
+) (bool, error) {
+	credentialKey := credPrefix + subject
+	challengeKey := ""
+	watchKeys := []string{credentialKey}
+	if challengeID != "" {
+		challengeKey = chUsedPrefix + challengeID
+		watchKeys = append(watchKeys, challengeKey)
+	}
 	for range transactionRetries {
 		claimed := false
 		err := s.rdb.Watch(ctx, func(tx *redis.Tx) error {
-			data, err := tx.Get(ctx, key).Bytes()
+			data, err := tx.Get(ctx, credentialKey).Bytes()
 			if err != nil {
 				return err
 			}
@@ -152,6 +166,15 @@ func (s *Store) ClaimCredentialStep(ctx context.Context, subject string, step, u
 			if step <= credential.LastUsedStep {
 				return nil
 			}
+			if challengeKey != "" {
+				used, err := tx.Exists(ctx, challengeKey).Result()
+				if err != nil {
+					return err
+				}
+				if used > 0 {
+					return nil
+				}
+			}
 
 			credential.LastUsedStep = step
 			credential.UpdatedAt = updatedAt
@@ -160,14 +183,17 @@ func (s *Store) ClaimCredentialStep(ctx context.Context, subject string, step, u
 				return err
 			}
 			_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-				pipe.Set(ctx, key, encoded, s.credTTL)
+				pipe.Set(ctx, credentialKey, encoded, s.credTTL)
+				if challengeKey != "" {
+					pipe.Set(ctx, challengeKey, "1", s.chUsedTTL)
+				}
 				return nil
 			})
 			if err == nil {
 				claimed = true
 			}
 			return err
-		}, key)
+		}, watchKeys...)
 		if err == redis.TxFailedErr {
 			continue
 		}
@@ -209,16 +235,7 @@ func (s *Store) DeleteSubject(ctx context.Context, subject string) error {
 		credPrefix + subject,
 		backupPrefix + subject,
 		enrollSubjectPrefix + subject,
-		enrollRevokedPrefix + subject,
-	}, enrollPrefix, revocationMarkerV1+strconv.FormatInt(time.Now().Unix(), 10)).Err()
-}
-
-func revocationTime(marker string) (int64, bool) {
-	if !strings.HasPrefix(marker, revocationMarkerV1) {
-		return 0, false
-	}
-	revokedAt, err := strconv.ParseInt(strings.TrimPrefix(marker, revocationMarkerV1), 10, 64)
-	return revokedAt, err == nil
+	}, enrollPrefix).Err()
 }
 
 // SaveEnrollment saves a temporary enrollment; TTL is applied.
@@ -262,9 +279,17 @@ func (s *Store) GetEnrollment(ctx context.Context, enrollID string) (*Enrollment
 	return &e, nil
 }
 
-// DeleteEnrollment removes the enrollment (after confirm).
+// DeleteEnrollment removes the enrollment and, only when it still points
+// to this ID, the subject's active-enrollment index.
 func (s *Store) DeleteEnrollment(ctx context.Context, enrollID string) error {
-	return s.rdb.Del(ctx, enrollPrefix+enrollID).Err()
+	enrollment, err := s.GetEnrollment(ctx, enrollID)
+	if err != nil || enrollment == nil {
+		return err
+	}
+	return deleteEnrollmentScript.Run(ctx, s.rdb, []string{
+		enrollPrefix + enrollID,
+		enrollSubjectPrefix + enrollment.Subject,
+	}, enrollID).Err()
 }
 
 // ConfirmEnrollment atomically persists the credential and backup codes and
@@ -284,7 +309,6 @@ func (s *Store) ConfirmEnrollment(ctx context.Context, enrollment *Enrollment, c
 	credentialKey := credPrefix + credential.Subject
 	backupKey := backupPrefix + credential.Subject
 	enrollmentSubjectKey := enrollSubjectPrefix + credential.Subject
-	enrollmentRevokedKey := enrollRevokedPrefix + credential.Subject
 	for range transactionRetries {
 		confirmed := false
 		credentialExists := false
@@ -304,30 +328,18 @@ func (s *Store) ConfirmEnrollment(ctx context.Context, enrollment *Enrollment, c
 				return nil
 			}
 			activeEnrollID, err := tx.Get(ctx, enrollmentSubjectKey).Result()
-			if err != nil && err != redis.Nil {
+			if err == redis.Nil {
+				// A pre-index instance can also revoke without leaving any durable
+				// enrollment marker. Accepting an unindexed record here could then
+				// recreate a revoked credential. Keep this path fail-closed; staged
+				// rollouts must let old pending enrollments expire and ask affected
+				// clients to start a new indexed enrollment.
+				return nil
+			}
+			if err != nil {
 				return err
 			}
-			// Deployments before the subject index was introduced may still
-			// write valid enrollment records during a rolling upgrade. The
-			// timestamped tombstone distinguishes those post-revocation writes
-			// from legacy records created before the revoke. Unknown marker
-			// formats fail closed. An exact subject-index match still authorizes
-			// a new-version enrollment without clearing the tombstone.
-			if err == redis.Nil {
-				marker, markerErr := tx.Get(ctx, enrollmentRevokedKey).Result()
-				if markerErr != nil && markerErr != redis.Nil {
-					return markerErr
-				}
-				if markerErr == nil {
-					revokedAt, valid := revocationTime(marker)
-					if !valid || current.CreatedAt <= revokedAt {
-						return nil
-					}
-				}
-			}
-			// The index, tombstone, and enrollment are all watched, so a
-			// concurrent revoke or newer enrollment aborts before commit.
-			if err == nil && activeEnrollID != enrollment.EnrollID {
+			if activeEnrollID != enrollment.EnrollID {
 				return nil
 			}
 			exists, err := tx.Exists(ctx, credentialKey).Result()
@@ -353,7 +365,7 @@ func (s *Store) ConfirmEnrollment(ctx context.Context, enrollment *Enrollment, c
 				confirmed = true
 			}
 			return err
-		}, enrollmentKey, enrollmentSubjectKey, enrollmentRevokedKey, credentialKey)
+		}, enrollmentKey, enrollmentSubjectKey, credentialKey)
 		if err == redis.TxFailedErr {
 			continue
 		}
@@ -431,13 +443,28 @@ func (s *Store) GetBackupCodes(ctx context.Context, subject string) ([]BackupCod
 	return entries, nil
 }
 
-// ConsumeBackupCode finds a matching unused backup code by hash, marks it used, returns true.
+// ConsumeBackupCode marks a matching unused backup code as used.
 func (s *Store) ConsumeBackupCode(ctx context.Context, subject string, codeHash string) (bool, error) {
-	key := backupPrefix + subject
+	return s.ConsumeBackupCodeAndClaimChallenge(ctx, subject, codeHash, "")
+}
+
+// ConsumeBackupCodeAndClaimChallenge atomically consumes a matching backup code
+// and, when supplied, claims the challenge. A lost challenge race leaves every
+// backup code untouched.
+func (s *Store) ConsumeBackupCodeAndClaimChallenge(
+	ctx context.Context, subject string, codeHash, challengeID string,
+) (bool, error) {
+	backupKey := backupPrefix + subject
+	challengeKey := ""
+	watchKeys := []string{backupKey}
+	if challengeID != "" {
+		challengeKey = chUsedPrefix + challengeID
+		watchKeys = append(watchKeys, challengeKey)
+	}
 	for range transactionRetries {
 		consumed := false
 		err := s.rdb.Watch(ctx, func(tx *redis.Tx) error {
-			data, err := tx.Get(ctx, key).Bytes()
+			data, err := tx.Get(ctx, backupKey).Bytes()
 			if err == redis.Nil {
 				return nil
 			}
@@ -448,26 +475,45 @@ func (s *Store) ConsumeBackupCode(ctx context.Context, subject string, codeHash 
 			if err := json.Unmarshal(data, &entries); err != nil {
 				return err
 			}
+
+			match := -1
 			for i := range entries {
-				if entries[i].UsedAt != 0 || subtle.ConstantTimeCompare([]byte(entries[i].CodeHash), []byte(codeHash)) != 1 {
-					continue
+				if entries[i].UsedAt == 0 &&
+					subtle.ConstantTimeCompare([]byte(entries[i].CodeHash), []byte(codeHash)) == 1 {
+					match = i
+					break
 				}
-				entries[i].UsedAt = time.Now().Unix()
-				encoded, err := json.Marshal(entries)
+			}
+			if match < 0 {
+				return nil
+			}
+			if challengeKey != "" {
+				used, err := tx.Exists(ctx, challengeKey).Result()
 				if err != nil {
 					return err
 				}
-				_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-					pipe.Set(ctx, key, encoded, 0)
+				if used > 0 {
 					return nil
-				})
-				if err == nil {
-					consumed = true
 				}
+			}
+
+			entries[match].UsedAt = time.Now().Unix()
+			encoded, err := json.Marshal(entries)
+			if err != nil {
 				return err
 			}
-			return nil
-		}, key)
+			_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+				pipe.Set(ctx, backupKey, encoded, 0)
+				if challengeKey != "" {
+					pipe.Set(ctx, challengeKey, "1", s.chUsedTTL)
+				}
+				return nil
+			})
+			if err == nil {
+				consumed = true
+			}
+			return err
+		}, watchKeys...)
 		if err == redis.TxFailedErr {
 			continue
 		}
