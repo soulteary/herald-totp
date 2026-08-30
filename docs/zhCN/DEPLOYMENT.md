@@ -36,10 +36,20 @@
 
 ## 运行
 
+加密密钥只生成**一次**，保存到 Secret Manager，并在每次启动时复用同一个值：
+
 ```bash
-export HERALD_TOTP_ENCRYPTION_KEY="$(openssl rand -base64 24)"
+# 仅在初始化时执行；不要把该命令放入重启脚本。
+openssl rand -base64 24 > herald-totp-encryption-key
+# 将该文件导入 Secret Manager，随后安全删除本地副本。
+
+# 每次启动均读取已经保存的值。
+export HERALD_TOTP_ENCRYPTION_KEY="<从 Secret Manager 读取的值>"
 go run .
 ```
+
+更换或丢失此密钥会导致所有既有 TOTP 凭证无法解密。当前不支持在线密钥轮换：
+应在备份中保留原密钥，并在替换前规划用户重新绑定迁移。
 
 使用 Redis TLS 时，启用 `REDIS_TLS_ENABLED`，将 `REDIS_TLS_SERVER_NAME`
 设置为证书名称；私有 CA 可通过 `REDIS_TLS_CA_FILE` 提供。部署环境应保持
