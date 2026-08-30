@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -280,6 +281,100 @@ func TestConfirmEnrollment_Concurrent(t *testing.T) {
 	wg.Wait()
 	if got := successes.Load(); got != 1 {
 		t.Fatalf("successful confirmations = %d, want 1", got)
+	}
+}
+
+func TestClaimCredentialStepAndChallenge_ConcurrentDifferentSteps(t *testing.T) {
+	st, mr := newTestStore(t)
+	defer mr.Close()
+	ctx := context.Background()
+	const subject = "atomic-totp"
+	const challengeID = "shared-totp-challenge"
+	if err := st.SaveCredential(ctx, &Credential{Subject: subject, Enabled: true}); err != nil {
+		t.Fatalf("SaveCredential: %v", err)
+	}
+
+	const workers = 16
+	start := make(chan struct{})
+	var successes atomic.Int32
+	var wg sync.WaitGroup
+	for i := 1; i <= workers; i++ {
+		step := int64(i)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			claimed, err := st.ClaimCredentialStepAndChallenge(ctx, subject, step, step, challengeID)
+			if err != nil {
+				t.Errorf("ClaimCredentialStepAndChallenge: %v", err)
+				return
+			}
+			if claimed {
+				successes.Add(1)
+			}
+		}()
+	}
+	close(start)
+	wg.Wait()
+	if got := successes.Load(); got != 1 {
+		t.Fatalf("successful atomic TOTP claims = %d, want 1", got)
+	}
+	if used, err := st.IsChallengeUsed(ctx, challengeID); err != nil || !used {
+		t.Fatalf("challenge used = (%v, %v), want true", used, err)
+	}
+}
+
+func TestConsumeBackupCodeAndClaimChallenge_ConcurrentDifferentCodes(t *testing.T) {
+	st, mr := newTestStore(t)
+	defer mr.Close()
+	ctx := context.Background()
+	const subject = "atomic-backup"
+	const challengeID = "shared-backup-challenge"
+	const workers = 16
+	entries := make([]BackupCodeEntry, workers)
+	for i := range entries {
+		entries[i].CodeHash = fmt.Sprintf("hash-%d", i)
+	}
+	if err := st.SaveBackupCodes(ctx, subject, entries); err != nil {
+		t.Fatalf("SaveBackupCodes: %v", err)
+	}
+
+	start := make(chan struct{})
+	var successes atomic.Int32
+	var wg sync.WaitGroup
+	for i := range workers {
+		hash := entries[i].CodeHash
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			consumed, err := st.ConsumeBackupCodeAndClaimChallenge(ctx, subject, hash, challengeID)
+			if err != nil {
+				t.Errorf("ConsumeBackupCodeAndClaimChallenge: %v", err)
+				return
+			}
+			if consumed {
+				successes.Add(1)
+			}
+		}()
+	}
+	close(start)
+	wg.Wait()
+	if got := successes.Load(); got != 1 {
+		t.Fatalf("successful atomic backup claims = %d, want 1", got)
+	}
+	got, err := st.GetBackupCodes(ctx, subject)
+	if err != nil {
+		t.Fatalf("GetBackupCodes: %v", err)
+	}
+	usedCodes := 0
+	for _, entry := range got {
+		if entry.UsedAt != 0 {
+			usedCodes++
+		}
+	}
+	if usedCodes != 1 {
+		t.Fatalf("consumed backup codes = %d, want 1", usedCodes)
 	}
 }
 
