@@ -14,6 +14,7 @@ const (
 	credPrefix          = "totp:cred:"
 	enrollPrefix        = "totp:enroll:"
 	enrollSubjectPrefix = "totp:enroll_subject:"
+	enrollRevokedPrefix = "totp:enroll_revoked:"
 	backupPrefix        = "totp:backup:"
 	chUsedPrefix        = "totp:ch_used:"
 	rateSubjectPrefix   = "totp:rate:subject:"
@@ -47,6 +48,7 @@ if redis.call("EXISTS", KEYS[3]) == 1 then
 end
 redis.call("SET", KEYS[1], ARGV[1], "PX", ARGV[2])
 redis.call("SET", KEYS[3], ARGV[3], "PX", ARGV[2])
+redis.call("DEL", KEYS[4])
 return 1
 `)
 
@@ -55,7 +57,9 @@ local enrollID = redis.call("GET", KEYS[3])
 if enrollID then
   redis.call("DEL", ARGV[1] .. enrollID)
 end
-return redis.call("DEL", KEYS[1], KEYS[2], KEYS[3])
+local deleted = redis.call("DEL", KEYS[1], KEYS[2], KEYS[3])
+redis.call("SET", KEYS[4], "1", "PX", ARGV[2])
+return deleted
 `)
 
 // Credential is the persisted TOTP credential for a subject.
@@ -203,7 +207,8 @@ func (s *Store) DeleteSubject(ctx context.Context, subject string) error {
 		credPrefix + subject,
 		backupPrefix + subject,
 		enrollSubjectPrefix + subject,
-	}, enrollPrefix).Err()
+		enrollRevokedPrefix + subject,
+	}, enrollPrefix, s.enrollTTL.Milliseconds()).Err()
 }
 
 // SaveEnrollment saves a temporary enrollment; TTL is applied.
@@ -216,6 +221,7 @@ func (s *Store) SaveEnrollment(ctx context.Context, e *Enrollment) error {
 		enrollPrefix + e.EnrollID,
 		credPrefix + e.Subject,
 		enrollSubjectPrefix + e.Subject,
+		enrollRevokedPrefix + e.Subject,
 	}, data, s.enrollTTL.Milliseconds(), e.EnrollID).Int64()
 	if err != nil {
 		return err
@@ -269,6 +275,7 @@ func (s *Store) ConfirmEnrollment(ctx context.Context, enrollment *Enrollment, c
 	credentialKey := credPrefix + credential.Subject
 	backupKey := backupPrefix + credential.Subject
 	enrollmentSubjectKey := enrollSubjectPrefix + credential.Subject
+	enrollmentRevokedKey := enrollRevokedPrefix + credential.Subject
 	for range transactionRetries {
 		confirmed := false
 		credentialExists := false
@@ -292,9 +299,21 @@ func (s *Store) ConfirmEnrollment(ctx context.Context, enrollment *Enrollment, c
 				return err
 			}
 			// Deployments before the subject index was introduced may still
-			// have valid main enrollment records. A missing index is compatible:
-			// because this key is watched, any concurrent newer enrollment that
-			// creates the index aborts this transaction before commit.
+			// have valid main enrollment records. A missing index is compatible
+			// only when no revocation tombstone exists. DeleteSubject writes that
+			// tombstone for one full enrollment TTL so an undiscoverable legacy
+			// record cannot confirm after the subject was revoked.
+			if err == redis.Nil {
+				revoked, existsErr := tx.Exists(ctx, enrollmentRevokedKey).Result()
+				if existsErr != nil {
+					return existsErr
+				}
+				if revoked > 0 {
+					return nil
+				}
+			}
+			// The index, tombstone, and enrollment are all watched, so a
+			// concurrent revoke or newer enrollment aborts before commit.
 			if err == nil && activeEnrollID != enrollment.EnrollID {
 				return nil
 			}
@@ -321,7 +340,7 @@ func (s *Store) ConfirmEnrollment(ctx context.Context, enrollment *Enrollment, c
 				confirmed = true
 			}
 			return err
-		}, enrollmentKey, enrollmentSubjectKey, credentialKey)
+		}, enrollmentKey, enrollmentSubjectKey, enrollmentRevokedKey, credentialKey)
 		if err == redis.TxFailedErr {
 			continue
 		}
