@@ -288,12 +288,16 @@ func TestConfirmEnrollment_PreIndexRecordBlockedAfterRevocation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal enrollment: %v", err)
 	}
-	if err := st.rdb.Set(ctx, enrollPrefix+enrollment.EnrollID, data, st.enrollTTL).Err(); err != nil {
+	if err := st.rdb.Set(ctx, enrollPrefix+enrollment.EnrollID, data, 2*st.enrollTTL).Err(); err != nil {
 		t.Fatalf("store pre-index enrollment: %v", err)
 	}
 
 	if err := st.DeleteSubject(ctx, enrollment.Subject); err != nil {
 		t.Fatalf("DeleteSubject: %v", err)
+	}
+	mr.FastForward(st.enrollTTL + time.Second)
+	if n, err := st.rdb.Exists(ctx, enrollPrefix+enrollment.EnrollID).Result(); err != nil || n != 1 {
+		t.Fatalf("legacy enrollment after configured TTL = (%d, %v), want 1, nil", n, err)
 	}
 	confirmed, err := st.ConfirmEnrollment(ctx, enrollment, &Credential{
 		Subject: enrollment.Subject, SecretEnc: enrollment.SecretEnc,
