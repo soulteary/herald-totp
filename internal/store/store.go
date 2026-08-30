@@ -50,6 +50,13 @@ redis.call("SET", KEYS[3], ARGV[3], "PX", ARGV[2])
 return 1
 `)
 
+var deleteEnrollmentScript = redis.NewScript(`
+if redis.call("GET", KEYS[2]) == ARGV[1] then
+  return redis.call("DEL", KEYS[1], KEYS[2])
+end
+return redis.call("DEL", KEYS[1])
+`)
+
 var deleteSubjectScript = redis.NewScript(`
 local enrollID = redis.call("GET", KEYS[3])
 if enrollID then
@@ -272,9 +279,17 @@ func (s *Store) GetEnrollment(ctx context.Context, enrollID string) (*Enrollment
 	return &e, nil
 }
 
-// DeleteEnrollment removes the enrollment (after confirm).
+// DeleteEnrollment removes the enrollment and, only when it still points
+// to this ID, the subject's active-enrollment index.
 func (s *Store) DeleteEnrollment(ctx context.Context, enrollID string) error {
-	return s.rdb.Del(ctx, enrollPrefix+enrollID).Err()
+	enrollment, err := s.GetEnrollment(ctx, enrollID)
+	if err != nil || enrollment == nil {
+		return err
+	}
+	return deleteEnrollmentScript.Run(ctx, s.rdb, []string{
+		enrollPrefix + enrollID,
+		enrollSubjectPrefix + enrollment.Subject,
+	}, enrollID).Err()
 }
 
 // ConfirmEnrollment atomically persists the credential and backup codes and

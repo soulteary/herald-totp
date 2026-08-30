@@ -140,10 +140,17 @@ func TestSaveGetEnrollment(t *testing.T) {
 	if got != nil {
 		t.Errorf("GetEnrollment(none) = %v, want nil", got)
 	}
-	_ = st.DeleteEnrollment(ctx, "e_abc")
+	if err := st.DeleteEnrollment(ctx, "e_abc"); err != nil {
+		t.Fatalf("DeleteEnrollment: %v", err)
+	}
 	got, _ = st.GetEnrollment(ctx, "e_abc")
 	if got != nil {
 		t.Errorf("GetEnrollment after Delete = %v, want nil", got)
+	}
+	if err := st.SaveEnrollment(ctx, &Enrollment{
+		EnrollID: "e_replacement", Subject: e.Subject, SecretEnc: "enc2",
+	}); err != nil {
+		t.Fatalf("new enrollment after DeleteEnrollment: %v", err)
 	}
 }
 
