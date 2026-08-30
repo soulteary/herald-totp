@@ -42,7 +42,7 @@ the same value on every start:
 
 ```bash
 # One-time provisioning; do not put this command in a restart script.
-openssl rand -base64 24 > herald-totp-encryption-key
+(umask 077; openssl rand -base64 24 | tr -d '\n' > herald-totp-encryption-key)
 # Import this file into your secret manager, then remove the local copy safely.
 
 # Every service start reads the already-provisioned value.
