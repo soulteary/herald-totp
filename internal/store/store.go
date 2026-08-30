@@ -48,7 +48,6 @@ if redis.call("EXISTS", KEYS[3]) == 1 then
 end
 redis.call("SET", KEYS[1], ARGV[1], "PX", ARGV[2])
 redis.call("SET", KEYS[3], ARGV[3], "PX", ARGV[2])
-redis.call("DEL", KEYS[4])
 return 1
 `)
 
@@ -221,7 +220,6 @@ func (s *Store) SaveEnrollment(ctx context.Context, e *Enrollment) error {
 		enrollPrefix + e.EnrollID,
 		credPrefix + e.Subject,
 		enrollSubjectPrefix + e.Subject,
-		enrollRevokedPrefix + e.Subject,
 	}, data, s.enrollTTL.Milliseconds(), e.EnrollID).Int64()
 	if err != nil {
 		return err
@@ -301,9 +299,10 @@ func (s *Store) ConfirmEnrollment(ctx context.Context, enrollment *Enrollment, c
 			// Deployments before the subject index was introduced may still
 			// have valid main enrollment records. A missing index is compatible
 			// only when no revocation tombstone exists. DeleteSubject retains
-			// that tombstone until an explicitly authorized SaveEnrollment clears
-			// it, so configuration changes cannot let a longer-lived legacy
-			// record confirm after the subject was revoked.
+			// that tombstone indefinitely, so configuration changes or a shorter
+			// indexed re-enrollment cannot let a longer-lived legacy record
+			// confirm after the subject was revoked. An exact subject-index match
+			// still authorizes the new enrollment without clearing the tombstone.
 			if err == redis.Nil {
 				revoked, existsErr := tx.Exists(ctx, enrollmentRevokedKey).Result()
 				if existsErr != nil {
