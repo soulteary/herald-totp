@@ -288,7 +288,7 @@ func TestConfirmEnrollment_PreIndexRecordBlockedAfterRevocation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal enrollment: %v", err)
 	}
-	if err := st.rdb.Set(ctx, enrollPrefix+enrollment.EnrollID, data, 2*st.enrollTTL).Err(); err != nil {
+	if err := st.rdb.Set(ctx, enrollPrefix+enrollment.EnrollID, data, 3*st.enrollTTL).Err(); err != nil {
 		t.Fatalf("store pre-index enrollment: %v", err)
 	}
 
@@ -309,13 +309,37 @@ func TestConfirmEnrollment_PreIndexRecordBlockedAfterRevocation(t *testing.T) {
 		t.Fatalf("credential after revoked legacy confirmation = (%+v, %v)", got, err)
 	}
 
-	if err := st.SaveEnrollment(ctx, &Enrollment{
+	replacement := &Enrollment{
 		EnrollID: "e_after_legacy_revoke", Subject: enrollment.Subject, SecretEnc: "new-secret",
-	}); err != nil {
+	}
+	if err := st.SaveEnrollment(ctx, replacement); err != nil {
 		t.Fatalf("new enrollment after legacy revoke: %v", err)
 	}
-	if n, err := st.rdb.Exists(ctx, enrollRevokedPrefix+enrollment.Subject).Result(); err != nil || n != 0 {
-		t.Fatalf("revocation tombstone after new enrollment = (%d, %v), want 0, nil", n, err)
+	if n, err := st.rdb.Exists(ctx, enrollRevokedPrefix+enrollment.Subject).Result(); err != nil || n != 1 {
+		t.Fatalf("revocation tombstone after new enrollment = (%d, %v), want 1, nil", n, err)
+	}
+	mr.FastForward(st.enrollTTL + time.Second)
+	if n, err := st.rdb.Exists(ctx, enrollPrefix+enrollment.EnrollID).Result(); err != nil || n != 1 {
+		t.Fatalf("legacy enrollment after replacement expiry = (%d, %v), want 1, nil", n, err)
+	}
+	confirmed, err = st.ConfirmEnrollment(ctx, enrollment, &Credential{
+		Subject: enrollment.Subject, SecretEnc: enrollment.SecretEnc,
+	}, nil)
+	if err != nil || confirmed {
+		t.Fatalf("ConfirmEnrollment(after replacement expiry) = (%v, %v), want false, nil", confirmed, err)
+	}
+
+	replacement = &Enrollment{
+		EnrollID: "e_authorized_replacement", Subject: enrollment.Subject, SecretEnc: "authorized-secret",
+	}
+	if err := st.SaveEnrollment(ctx, replacement); err != nil {
+		t.Fatalf("authorized replacement enrollment: %v", err)
+	}
+	confirmed, err = st.ConfirmEnrollment(ctx, replacement, &Credential{
+		Subject: replacement.Subject, SecretEnc: replacement.SecretEnc,
+	}, nil)
+	if err != nil || !confirmed {
+		t.Fatalf("ConfirmEnrollment(indexed replacement) = (%v, %v), want true, nil", confirmed, err)
 	}
 }
 
