@@ -5,6 +5,8 @@ import (
 	"crypto/subtle"
 	"encoding/json"
 	"errors"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -15,6 +17,7 @@ const (
 	enrollPrefix        = "totp:enroll:"
 	enrollSubjectPrefix = "totp:enroll_subject:"
 	enrollRevokedPrefix = "totp:enroll_revoked:"
+	revocationMarkerV1  = "v1:"
 	backupPrefix        = "totp:backup:"
 	chUsedPrefix        = "totp:ch_used:"
 	rateSubjectPrefix   = "totp:rate:subject:"
@@ -57,7 +60,7 @@ if enrollID then
   redis.call("DEL", ARGV[1] .. enrollID)
 end
 local deleted = redis.call("DEL", KEYS[1], KEYS[2], KEYS[3])
-redis.call("SET", KEYS[4], "1")
+redis.call("SET", KEYS[4], ARGV[2])
 return deleted
 `)
 
@@ -207,7 +210,15 @@ func (s *Store) DeleteSubject(ctx context.Context, subject string) error {
 		backupPrefix + subject,
 		enrollSubjectPrefix + subject,
 		enrollRevokedPrefix + subject,
-	}, enrollPrefix).Err()
+	}, enrollPrefix, revocationMarkerV1+strconv.FormatInt(time.Now().Unix(), 10)).Err()
+}
+
+func revocationTime(marker string) (int64, bool) {
+	if !strings.HasPrefix(marker, revocationMarkerV1) {
+		return 0, false
+	}
+	revokedAt, err := strconv.ParseInt(strings.TrimPrefix(marker, revocationMarkerV1), 10, 64)
+	return revokedAt, err == nil
 }
 
 // SaveEnrollment saves a temporary enrollment; TTL is applied.
@@ -297,19 +308,21 @@ func (s *Store) ConfirmEnrollment(ctx context.Context, enrollment *Enrollment, c
 				return err
 			}
 			// Deployments before the subject index was introduced may still
-			// have valid main enrollment records. A missing index is compatible
-			// only when no revocation tombstone exists. DeleteSubject retains
-			// that tombstone indefinitely, so configuration changes or a shorter
-			// indexed re-enrollment cannot let a longer-lived legacy record
-			// confirm after the subject was revoked. An exact subject-index match
-			// still authorizes the new enrollment without clearing the tombstone.
+			// write valid enrollment records during a rolling upgrade. The
+			// timestamped tombstone distinguishes those post-revocation writes
+			// from legacy records created before the revoke. Unknown marker
+			// formats fail closed. An exact subject-index match still authorizes
+			// a new-version enrollment without clearing the tombstone.
 			if err == redis.Nil {
-				revoked, existsErr := tx.Exists(ctx, enrollmentRevokedKey).Result()
-				if existsErr != nil {
-					return existsErr
+				marker, markerErr := tx.Get(ctx, enrollmentRevokedKey).Result()
+				if markerErr != nil && markerErr != redis.Nil {
+					return markerErr
 				}
-				if revoked > 0 {
-					return nil
+				if markerErr == nil {
+					revokedAt, valid := revocationTime(marker)
+					if !valid || current.CreatedAt <= revokedAt {
+						return nil
+					}
 				}
 			}
 			// The index, tombstone, and enrollment are all watched, so a
