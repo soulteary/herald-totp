@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
@@ -280,6 +281,30 @@ func TestClient_Verify_NonOK(t *testing.T) {
 	_, err = client.Verify(context.Background(), &VerifyRequest{Subject: "user1", Code: "123456"})
 	if err == nil {
 		t.Fatal("expected error for 401 response")
+	}
+}
+
+func TestClient_Verify_NonJSONGatewayErrorPreservesHTTPStatus(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadGateway)
+		_, _ = w.Write([]byte("<html>upstream unavailable</html>"))
+	}))
+	defer server.Close()
+
+	client, err := NewClient(DefaultOptions().WithBaseURL(server.URL))
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+	_, err = client.Verify(context.Background(), &VerifyRequest{Subject: "user1", Code: "123456"})
+	var httpErr *HTTPError
+	if !errors.As(err, &httpErr) {
+		t.Fatalf("error = %T %v, want *HTTPError", err, err)
+	}
+	if httpErr.StatusCode != http.StatusBadGateway {
+		t.Fatalf("status = %d, want 502", httpErr.StatusCode)
+	}
+	if !strings.Contains(httpErr.Body, "upstream unavailable") {
+		t.Fatalf("body summary = %q, want gateway response", httpErr.Body)
 	}
 }
 

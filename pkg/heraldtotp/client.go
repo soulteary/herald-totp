@@ -121,6 +121,28 @@ func (c *Client) Status(ctx context.Context, subject string) (*StatusResponse, e
 	return &out, nil
 }
 
+// HTTPError preserves the transport-level response for non-2xx calls.
+type HTTPError struct {
+	StatusCode int
+	Body       string
+	Reason     string
+}
+
+func (e *HTTPError) Error() string {
+	if e.Reason != "" {
+		return fmt.Sprintf("herald-totp returned HTTP %d: %s", e.StatusCode, e.Reason)
+	}
+	return fmt.Sprintf("herald-totp returned HTTP %d: %s", e.StatusCode, e.Body)
+}
+
+func responseBodySummary(body []byte) string {
+	const limit = 200
+	if len(body) <= limit {
+		return string(body)
+	}
+	return string(body[:limit]) + "..."
+}
+
 // VerifyRequest is the request for POST /v1/verify.
 type VerifyRequest struct {
 	Subject     string `json:"subject"`
@@ -284,12 +306,22 @@ func (c *Client) Verify(ctx context.Context, req *VerifyRequest) (*VerifyRespons
 	}
 	defer func() { _ = resp.Body.Close() }()
 	respBody, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		httpErr := &HTTPError{
+			StatusCode: resp.StatusCode,
+			Body:       responseBodySummary(respBody),
+		}
+		var out VerifyResponse
+		if err := json.Unmarshal(respBody, &out); err == nil {
+			httpErr.Reason = out.Reason
+			return &out, httpErr
+		}
+		return nil, httpErr
+	}
+
 	var out VerifyResponse
 	if err := json.Unmarshal(respBody, &out); err != nil {
-		return nil, fmt.Errorf("verify returned %d with invalid JSON: %w", resp.StatusCode, err)
-	}
-	if resp.StatusCode != http.StatusOK {
-		return &out, fmt.Errorf("verify returned %d: %s", resp.StatusCode, string(respBody))
+		return nil, fmt.Errorf("verify returned successful HTTP %d with invalid JSON: %w", resp.StatusCode, err)
 	}
 	return &out, nil
 }
