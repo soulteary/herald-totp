@@ -246,6 +246,59 @@ func TestConfirmEnrollment(t *testing.T) {
 	}
 }
 
+func TestConfirmEnrollment_PreIndexRecord(t *testing.T) {
+	st, mr := newTestStore(t)
+	defer mr.Close()
+	ctx := context.Background()
+	enrollment := &Enrollment{
+		EnrollID: "e_pre_index", Subject: "upgrade-user", SecretEnc: "secret",
+		Period: 30, Digits: 6,
+	}
+	data, err := json.Marshal(enrollment)
+	if err != nil {
+		t.Fatalf("marshal enrollment: %v", err)
+	}
+	// Simulate a record written by a version that predates enroll_subject keys.
+	if err := st.rdb.Set(ctx, enrollPrefix+enrollment.EnrollID, data, st.enrollTTL).Err(); err != nil {
+		t.Fatalf("seed pre-index enrollment: %v", err)
+	}
+
+	credential := &Credential{
+		Subject: enrollment.Subject, SecretEnc: enrollment.SecretEnc,
+		Period: 30, Digits: 6, Enabled: true,
+	}
+	confirmed, err := st.ConfirmEnrollment(ctx, enrollment, credential, nil)
+	if err != nil || !confirmed {
+		t.Fatalf("ConfirmEnrollment(pre-index) = (%v, %v), want true", confirmed, err)
+	}
+	if got, err := st.GetCredential(ctx, enrollment.Subject); err != nil || got == nil {
+		t.Fatalf("credential after upgrade confirmation = (%+v, %v)", got, err)
+	}
+}
+
+func TestConfirmEnrollment_PreIndexRecordDoesNotReplaceNewerEnrollment(t *testing.T) {
+	st, mr := newTestStore(t)
+	defer mr.Close()
+	ctx := context.Background()
+	oldEnrollment := &Enrollment{EnrollID: "e_old", Subject: "upgrade-race", SecretEnc: "old"}
+	data, _ := json.Marshal(oldEnrollment)
+	if err := st.rdb.Set(ctx, enrollPrefix+oldEnrollment.EnrollID, data, st.enrollTTL).Err(); err != nil {
+		t.Fatalf("seed old enrollment: %v", err)
+	}
+	if err := st.SaveEnrollment(ctx, &Enrollment{
+		EnrollID: "e_new", Subject: oldEnrollment.Subject, SecretEnc: "new",
+	}); err != nil {
+		t.Fatalf("SaveEnrollment(new): %v", err)
+	}
+
+	confirmed, err := st.ConfirmEnrollment(ctx, oldEnrollment, &Credential{
+		Subject: oldEnrollment.Subject, SecretEnc: oldEnrollment.SecretEnc,
+	}, nil)
+	if err != nil || confirmed {
+		t.Fatalf("ConfirmEnrollment(old) = (%v, %v), want false, nil", confirmed, err)
+	}
+}
+
 func TestConfirmEnrollment_Concurrent(t *testing.T) {
 	st, mr := newTestStore(t)
 	defer mr.Close()
