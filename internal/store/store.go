@@ -288,11 +288,15 @@ func (s *Store) ConfirmEnrollment(ctx context.Context, enrollment *Enrollment, c
 				return nil
 			}
 			activeEnrollID, err := tx.Get(ctx, enrollmentSubjectKey).Result()
-			if err == redis.Nil || activeEnrollID != enrollment.EnrollID {
-				return nil
-			}
-			if err != nil {
+			if err != nil && err != redis.Nil {
 				return err
+			}
+			// Deployments before the subject index was introduced may still
+			// have valid main enrollment records. A missing index is compatible:
+			// because this key is watched, any concurrent newer enrollment that
+			// creates the index aborts this transaction before commit.
+			if err == nil && activeEnrollID != enrollment.EnrollID {
+				return nil
 			}
 			exists, err := tx.Exists(ctx, credentialKey).Result()
 			if err != nil {
