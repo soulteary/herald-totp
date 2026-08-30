@@ -98,6 +98,30 @@ func TestInitialize_InvalidHMACKeys(t *testing.T) {
 	}
 }
 
+func TestInitialize_AggregatesHMACParseAndIndependentErrors(t *testing.T) {
+	useValidConfig(t)
+	HMACKeysJSON = "{invalid"
+	Port = ""
+	EncryptionKey = "short"
+
+	err := Initialize(logger.New(logger.Config{Level: logger.Disabled}))
+	if err == nil {
+		t.Fatal("Initialize: expected aggregated error")
+	}
+	for _, want := range []string{
+		"parse HERALD_TOTP_HMAC_KEYS",
+		"PORT",
+		"HERALD_TOTP_ENCRYPTION_KEY",
+	} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("Initialize error = %v, want substring %q", err, want)
+		}
+	}
+	if HasHMACKeys() {
+		t.Fatal("invalid JSON should leave the parsed key map empty")
+	}
+}
+
 func TestInitialize_SingleHMACKeyAllowsOmittedKeyID(t *testing.T) {
 	useValidConfig(t)
 	oldJSON, oldMap, oldSingle := HMACKeysJSON, hmacKeysMap, hmacSingleKeyID

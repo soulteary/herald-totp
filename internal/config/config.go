@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -60,19 +61,21 @@ func Initialize(l *logger.Logger) error {
 	log = l
 	hmacKeysMap = nil
 	hmacSingleKeyID = ""
+	var parseErr error
 	if HMACKeysJSON != "" {
 		parsed, err := parseHMACKeys(HMACKeysJSON)
 		if err != nil {
-			return fmt.Errorf("parse HERALD_TOTP_HMAC_KEYS: %w", err)
-		}
-		hmacKeysMap = parsed
-		if len(hmacKeysMap) == 1 {
-			for keyID := range hmacKeysMap {
-				hmacSingleKeyID = keyID
+			parseErr = fmt.Errorf("parse HERALD_TOTP_HMAC_KEYS: %w", err)
+		} else {
+			hmacKeysMap = parsed
+			if len(hmacKeysMap) == 1 {
+				for keyID := range hmacKeysMap {
+					hmacSingleKeyID = keyID
+				}
 			}
 		}
 	}
-	return Validate()
+	return errors.Join(parseErr, Validate())
 }
 
 func parseHMACKeys(raw string) (map[string]string, error) {
