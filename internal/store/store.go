@@ -127,15 +127,28 @@ func (s *Store) SaveCredential(ctx context.Context, c *Credential) error {
 	return s.rdb.Set(ctx, key, data, 0).Err()
 }
 
-// ClaimCredentialStep advances a credential's last-used TOTP counter with an
-// optimistic Redis transaction. It returns false when the counter was already
-// used, so concurrent requests cannot both accept the same TOTP code.
+// ClaimCredentialStep advances a credential's last-used TOTP counter.
 func (s *Store) ClaimCredentialStep(ctx context.Context, subject string, step, updatedAt int64) (bool, error) {
-	key := credPrefix + subject
+	return s.ClaimCredentialStepAndChallenge(ctx, subject, step, updatedAt, "")
+}
+
+// ClaimCredentialStepAndChallenge atomically advances the TOTP counter and,
+// when supplied, claims the challenge. Neither value changes if either one was
+// already consumed.
+func (s *Store) ClaimCredentialStepAndChallenge(
+	ctx context.Context, subject string, step, updatedAt int64, challengeID string,
+) (bool, error) {
+	credentialKey := credPrefix + subject
+	challengeKey := ""
+	watchKeys := []string{credentialKey}
+	if challengeID != "" {
+		challengeKey = chUsedPrefix + challengeID
+		watchKeys = append(watchKeys, challengeKey)
+	}
 	for range transactionRetries {
 		claimed := false
 		err := s.rdb.Watch(ctx, func(tx *redis.Tx) error {
-			data, err := tx.Get(ctx, key).Bytes()
+			data, err := tx.Get(ctx, credentialKey).Bytes()
 			if err != nil {
 				return err
 			}
@@ -146,6 +159,15 @@ func (s *Store) ClaimCredentialStep(ctx context.Context, subject string, step, u
 			if step <= credential.LastUsedStep {
 				return nil
 			}
+			if challengeKey != "" {
+				used, err := tx.Exists(ctx, challengeKey).Result()
+				if err != nil {
+					return err
+				}
+				if used > 0 {
+					return nil
+				}
+			}
 
 			credential.LastUsedStep = step
 			credential.UpdatedAt = updatedAt
@@ -154,14 +176,17 @@ func (s *Store) ClaimCredentialStep(ctx context.Context, subject string, step, u
 				return err
 			}
 			_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-				pipe.Set(ctx, key, encoded, s.credTTL)
+				pipe.Set(ctx, credentialKey, encoded, s.credTTL)
+				if challengeKey != "" {
+					pipe.Set(ctx, challengeKey, "1", s.chUsedTTL)
+				}
 				return nil
 			})
 			if err == nil {
 				claimed = true
 			}
 			return err
-		}, key)
+		}, watchKeys...)
 		if err == redis.TxFailedErr {
 			continue
 		}
@@ -395,13 +420,28 @@ func (s *Store) GetBackupCodes(ctx context.Context, subject string) ([]BackupCod
 	return entries, nil
 }
 
-// ConsumeBackupCode finds a matching unused backup code by hash, marks it used, returns true.
+// ConsumeBackupCode marks a matching unused backup code as used.
 func (s *Store) ConsumeBackupCode(ctx context.Context, subject string, codeHash string) (bool, error) {
-	key := backupPrefix + subject
+	return s.ConsumeBackupCodeAndClaimChallenge(ctx, subject, codeHash, "")
+}
+
+// ConsumeBackupCodeAndClaimChallenge atomically consumes a matching backup code
+// and, when supplied, claims the challenge. A lost challenge race leaves every
+// backup code untouched.
+func (s *Store) ConsumeBackupCodeAndClaimChallenge(
+	ctx context.Context, subject string, codeHash, challengeID string,
+) (bool, error) {
+	backupKey := backupPrefix + subject
+	challengeKey := ""
+	watchKeys := []string{backupKey}
+	if challengeID != "" {
+		challengeKey = chUsedPrefix + challengeID
+		watchKeys = append(watchKeys, challengeKey)
+	}
 	for range transactionRetries {
 		consumed := false
 		err := s.rdb.Watch(ctx, func(tx *redis.Tx) error {
-			data, err := tx.Get(ctx, key).Bytes()
+			data, err := tx.Get(ctx, backupKey).Bytes()
 			if err == redis.Nil {
 				return nil
 			}
@@ -412,26 +452,45 @@ func (s *Store) ConsumeBackupCode(ctx context.Context, subject string, codeHash 
 			if err := json.Unmarshal(data, &entries); err != nil {
 				return err
 			}
+
+			match := -1
 			for i := range entries {
-				if entries[i].UsedAt != 0 || subtle.ConstantTimeCompare([]byte(entries[i].CodeHash), []byte(codeHash)) != 1 {
-					continue
+				if entries[i].UsedAt == 0 &&
+					subtle.ConstantTimeCompare([]byte(entries[i].CodeHash), []byte(codeHash)) == 1 {
+					match = i
+					break
 				}
-				entries[i].UsedAt = time.Now().Unix()
-				encoded, err := json.Marshal(entries)
+			}
+			if match < 0 {
+				return nil
+			}
+			if challengeKey != "" {
+				used, err := tx.Exists(ctx, challengeKey).Result()
 				if err != nil {
 					return err
 				}
-				_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-					pipe.Set(ctx, key, encoded, 0)
+				if used > 0 {
 					return nil
-				})
-				if err == nil {
-					consumed = true
 				}
+			}
+
+			entries[match].UsedAt = time.Now().Unix()
+			encoded, err := json.Marshal(entries)
+			if err != nil {
 				return err
 			}
-			return nil
-		}, key)
+			_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+				pipe.Set(ctx, backupKey, encoded, 0)
+				if challengeKey != "" {
+					pipe.Set(ctx, challengeKey, "1", s.chUsedTTL)
+				}
+				return nil
+			})
+			if err == nil {
+				consumed = true
+			}
+			return err
+		}, watchKeys...)
 		if err == redis.TxFailedErr {
 			continue
 		}
