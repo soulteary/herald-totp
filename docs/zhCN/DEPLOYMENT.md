@@ -40,7 +40,7 @@
 
 ```bash
 # 仅在初始化时执行；不要把该命令放入重启脚本。
-openssl rand -base64 24 > herald-totp-encryption-key
+(umask 077; openssl rand -base64 24 | tr -d '\n' > herald-totp-encryption-key)
 # 将该文件导入 Secret Manager，随后安全删除本地副本。
 
 # 每次启动均读取已经保存的值。
