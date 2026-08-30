@@ -343,6 +343,63 @@ func TestConfirmEnrollment_PreIndexRecordBlockedAfterRevocation(t *testing.T) {
 	}
 }
 
+func TestConfirmEnrollment_PreIndexRecordCreatedAfterRevocation(t *testing.T) {
+	st, mr := newTestStore(t)
+	defer mr.Close()
+	ctx := context.Background()
+	subject := "rolling-upgrade-reenroll"
+
+	if err := st.DeleteSubject(ctx, subject); err != nil {
+		t.Fatalf("DeleteSubject: %v", err)
+	}
+	marker, err := st.rdb.Get(ctx, enrollRevokedPrefix+subject).Result()
+	if err != nil {
+		t.Fatalf("get revocation marker: %v", err)
+	}
+	revokedAt, valid := revocationTime(marker)
+	if !valid {
+		t.Fatalf("invalid revocation marker %q", marker)
+	}
+
+	// Simulate an old instance writing without the subject index in the same
+	// second as the revoke. Ambiguous ordering fails closed.
+	atBoundary := &Enrollment{
+		EnrollID: "e_legacy_at_revoke", Subject: subject, SecretEnc: "boundary-secret", CreatedAt: revokedAt,
+	}
+	data, err := json.Marshal(atBoundary)
+	if err != nil {
+		t.Fatalf("marshal boundary enrollment: %v", err)
+	}
+	if err := st.rdb.Set(ctx, enrollPrefix+atBoundary.EnrollID, data, st.enrollTTL).Err(); err != nil {
+		t.Fatalf("seed boundary enrollment: %v", err)
+	}
+	confirmed, err := st.ConfirmEnrollment(ctx, atBoundary, &Credential{
+		Subject: subject, SecretEnc: atBoundary.SecretEnc,
+	}, nil)
+	if err != nil || confirmed {
+		t.Fatalf("ConfirmEnrollment(at revoke) = (%v, %v), want false, nil", confirmed, err)
+	}
+
+	// A later legacy write is a deliberate re-enrollment that happened after
+	// revocation and remains confirmable during the rolling deployment.
+	after := &Enrollment{
+		EnrollID: "e_legacy_after_revoke", Subject: subject, SecretEnc: "new-secret", CreatedAt: revokedAt + 1,
+	}
+	data, err = json.Marshal(after)
+	if err != nil {
+		t.Fatalf("marshal post-revoke enrollment: %v", err)
+	}
+	if err := st.rdb.Set(ctx, enrollPrefix+after.EnrollID, data, st.enrollTTL).Err(); err != nil {
+		t.Fatalf("seed post-revoke enrollment: %v", err)
+	}
+	confirmed, err = st.ConfirmEnrollment(ctx, after, &Credential{
+		Subject: subject, SecretEnc: after.SecretEnc,
+	}, nil)
+	if err != nil || !confirmed {
+		t.Fatalf("ConfirmEnrollment(after revoke) = (%v, %v), want true, nil", confirmed, err)
+	}
+}
+
 func TestConfirmEnrollment_PreIndexRecordDoesNotReplaceNewerEnrollment(t *testing.T) {
 	st, mr := newTestStore(t)
 	defer mr.Close()
