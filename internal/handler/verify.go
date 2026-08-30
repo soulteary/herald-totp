@@ -159,4 +159,3 @@ func Verify(st *store.Store, log *logger.Logger) fiber.Handler {
 		return c.JSON(VerifyResponse{OK: true, Subject: req.Subject, AMR: []string{"totp"}, IssuedAt: now.Unix()})
 	}
 }
-
