@@ -58,7 +58,7 @@ if enrollID then
   redis.call("DEL", ARGV[1] .. enrollID)
 end
 local deleted = redis.call("DEL", KEYS[1], KEYS[2], KEYS[3])
-redis.call("SET", KEYS[4], "1", "PX", ARGV[2])
+redis.call("SET", KEYS[4], "1")
 return deleted
 `)
 
@@ -208,7 +208,7 @@ func (s *Store) DeleteSubject(ctx context.Context, subject string) error {
 		backupPrefix + subject,
 		enrollSubjectPrefix + subject,
 		enrollRevokedPrefix + subject,
-	}, enrollPrefix, s.enrollTTL.Milliseconds()).Err()
+	}, enrollPrefix).Err()
 }
 
 // SaveEnrollment saves a temporary enrollment; TTL is applied.
@@ -300,9 +300,10 @@ func (s *Store) ConfirmEnrollment(ctx context.Context, enrollment *Enrollment, c
 			}
 			// Deployments before the subject index was introduced may still
 			// have valid main enrollment records. A missing index is compatible
-			// only when no revocation tombstone exists. DeleteSubject writes that
-			// tombstone for one full enrollment TTL so an undiscoverable legacy
-			// record cannot confirm after the subject was revoked.
+			// only when no revocation tombstone exists. DeleteSubject retains
+			// that tombstone until an explicitly authorized SaveEnrollment clears
+			// it, so configuration changes cannot let a longer-lived legacy
+			// record confirm after the subject was revoked.
 			if err == redis.Nil {
 				revoked, existsErr := tx.Exists(ctx, enrollmentRevokedKey).Result()
 				if existsErr != nil {
