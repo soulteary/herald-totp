@@ -328,11 +328,19 @@ func (s *Store) ConfirmEnrollment(ctx context.Context, enrollment *Enrollment, c
 				return nil
 			}
 			activeEnrollID, err := tx.Get(ctx, enrollmentSubjectKey).Result()
-			if err == redis.Nil || activeEnrollID != enrollment.EnrollID {
+			if err == redis.Nil {
+				// A pre-index instance can also revoke without leaving any durable
+				// enrollment marker. Accepting an unindexed record here could then
+				// recreate a revoked credential. Keep this path fail-closed; staged
+				// rollouts must let old pending enrollments expire and ask affected
+				// clients to start a new indexed enrollment.
 				return nil
 			}
 			if err != nil {
 				return err
+			}
+			if activeEnrollID != enrollment.EnrollID {
+				return nil
 			}
 			exists, err := tx.Exists(ctx, credentialKey).Result()
 			if err != nil {

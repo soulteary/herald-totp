@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sync"
@@ -251,6 +252,37 @@ func TestConfirmEnrollment(t *testing.T) {
 	confirmed, err = st.ConfirmEnrollment(ctx, enrollment, credential, entries)
 	if err != nil || confirmed {
 		t.Fatalf("second ConfirmEnrollment = (%v, %v), want false", confirmed, err)
+	}
+}
+
+func TestConfirmEnrollment_PreIndexRecordFailsClosed(t *testing.T) {
+	st, mr := newTestStore(t)
+	defer mr.Close()
+	ctx := context.Background()
+	enrollment := &Enrollment{
+		EnrollID: "e_pre_index", Subject: "upgrade-user", SecretEnc: "legacy-secret",
+		Period: 30, Digits: 6, CreatedAt: time.Now().Unix(),
+	}
+	data, err := json.Marshal(enrollment)
+	if err != nil {
+		t.Fatalf("marshal enrollment: %v", err)
+	}
+	// Simulate a record written by a version that predates subject indexes.
+	if err := st.rdb.Set(ctx, enrollPrefix+enrollment.EnrollID, data, st.enrollTTL).Err(); err != nil {
+		t.Fatalf("seed pre-index enrollment: %v", err)
+	}
+
+	confirmed, err := st.ConfirmEnrollment(ctx, enrollment, &Credential{
+		Subject: enrollment.Subject, SecretEnc: enrollment.SecretEnc,
+	}, nil)
+	if err != nil || confirmed {
+		t.Fatalf("ConfirmEnrollment(pre-index) = (%v, %v), want false, nil", confirmed, err)
+	}
+	if got, err := st.GetCredential(ctx, enrollment.Subject); err != nil || got != nil {
+		t.Fatalf("credential after pre-index confirmation = (%+v, %v), want nil, nil", got, err)
+	}
+	if got, err := st.GetEnrollment(ctx, enrollment.EnrollID); err != nil || got == nil {
+		t.Fatalf("pre-index enrollment should remain available for migration handling: (%+v, %v)", got, err)
 	}
 }
 
