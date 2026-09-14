@@ -3,7 +3,7 @@ module github.com/soulteary/herald-totp
 go 1.27.0
 
 require (
-	github.com/alicebob/miniredis/v2 v2.36.1
+	github.com/alicebob/miniredis/v2 v2.39.0
 	github.com/gofiber/fiber/v3 v3.5.0
 	github.com/pquerna/otp v1.5.0
 	github.com/prometheus/client_golang v1.24.1
@@ -11,8 +11,8 @@ require (
 	github.com/pterm/pterm v0.12.83
 	github.com/redis/go-redis/v9 v9.22.0
 	github.com/soulteary/cli-kit v1.9.0
-	github.com/soulteary/health-kit/v2 v2.2.0
-	github.com/soulteary/logger-kit/v2 v2.2.0
+	github.com/soulteary/health-kit/v2 v2.3.0
+	github.com/soulteary/logger-kit/v2 v2.3.0
 	github.com/soulteary/metrics-kit/v2 v2.2.0
 	github.com/soulteary/middleware-kit/v2 v2.2.0
 	github.com/soulteary/redis-kit v1.6.0
