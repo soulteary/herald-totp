@@ -4,8 +4,8 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v3"
-	logger "github.com/soulteary/logger-kit/v2"
-	secure "github.com/soulteary/secure-kit"
+	logger "github.com/soulteary/logger-kit/v3"
+	secure "github.com/soulteary/secure-kit/v2"
 
 	"github.com/soulteary/herald-totp/internal/config"
 	"github.com/soulteary/herald-totp/internal/metrics"
