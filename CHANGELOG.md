@@ -7,6 +7,8 @@ The project follows [Semantic Versioning](https://semver.org/). Dates use the
 
 ## [Unreleased]
 
+## [1.2.3] - 2026-09-21
+
 ### Changed
 
 - Upgraded every soulteary kit dependency to its latest major version:
@@ -79,5 +81,6 @@ Existing credential and backup-code records keep their Redis key and JSON
 formats. Backup codes issued before v1.0.0 remain valid until consumed or the
 credential is revoked; only newly generated codes use the longer format.
 
-[Unreleased]: https://github.com/soulteary/herald-totp/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/soulteary/herald-totp/compare/v1.2.3...HEAD
+[1.2.3]: https://github.com/soulteary/herald-totp/compare/v1.2.2...v1.2.3
 [1.0.0]: https://github.com/soulteary/herald-totp/compare/v0.6.0...v1.0.0
