@@ -13,8 +13,8 @@ import (
 	"github.com/pterm/pterm/putils"
 	"github.com/soulteary/herald-totp/internal/config"
 	"github.com/soulteary/herald-totp/internal/router"
-	"github.com/soulteary/logger-kit/v2"
-	version "github.com/soulteary/version-kit/v2"
+	"github.com/soulteary/logger-kit/v3"
+	version "github.com/soulteary/version-kit/v4"
 )
 
 func showBanner() {

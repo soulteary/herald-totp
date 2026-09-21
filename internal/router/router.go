@@ -6,10 +6,14 @@ import (
 	"github.com/gofiber/fiber/v3"
 	"github.com/gofiber/fiber/v3/middleware/cors"
 	"github.com/gofiber/fiber/v3/middleware/recover"
-	health "github.com/soulteary/health-kit/v2"
-	logger "github.com/soulteary/logger-kit/v2"
-	metricskit "github.com/soulteary/metrics-kit/v2"
-	middlewarekit "github.com/soulteary/middleware-kit/v2"
+	health "github.com/soulteary/health-kit/v4"
+	healthfiber "github.com/soulteary/health-kit/v4/fiberadapter"
+	redisprobe "github.com/soulteary/health-kit/v4/redisprobe"
+	logger "github.com/soulteary/logger-kit/v3"
+	loggerfiber "github.com/soulteary/logger-kit/v3/fiberadapter"
+	metricsfiber "github.com/soulteary/metrics-kit/v3/fiberadapter"
+	middlewarekit "github.com/soulteary/middleware-kit/v3"
+	mwfiber "github.com/soulteary/middleware-kit/v3/fiberadapter"
 	rediskit "github.com/soulteary/redis-kit/client"
 
 	"github.com/soulteary/herald-totp/internal/config"
@@ -49,11 +53,13 @@ func Setup(app *fiber.App, log *logger.Logger) (*store.Store, error) {
 	st := store.NewStore(redisClient, enrollTTL, 0, chUsedTTL, rateSubTTL, rateIPTTL)
 
 	app.Use(recover.New())
-	app.Use(logger.FiberMiddleware(logger.MiddlewareConfig{
-		Logger:           log,
-		SkipPaths:        []string{"/healthz"},
-		IncludeRequestID: true,
-		IncludeLatency:   true,
+	app.Use(loggerfiber.Middleware(loggerfiber.Config{
+		MiddlewareConfig: logger.MiddlewareConfig{
+			Logger:           log,
+			SkipPaths:        []string{"/healthz"},
+			IncludeRequestID: true,
+			IncludeLatency:   true,
+		},
 	}))
 	app.Use(cors.New(cors.Config{
 		AllowOrigins: []string{"*"},
@@ -63,22 +69,24 @@ func Setup(app *fiber.App, log *logger.Logger) (*store.Store, error) {
 
 	healthConfig := health.DefaultConfig().WithServiceName(config.ServiceName)
 	healthAgg := health.NewAggregator(healthConfig)
-	healthAgg.AddChecker(health.NewRedisChecker(redisClient))
-	app.Get("/healthz", health.FiberHandler(healthAgg))
+	healthAgg.AddChecker(redisprobe.New(redisClient))
+	app.Get("/healthz", healthfiber.Handler(healthAgg))
 
-	app.Get("/metrics", metricskit.FiberHandlerFor(metrics.Registry))
+	app.Get("/metrics", metricsfiber.HandlerFor(metrics.Registry))
 
 	v1 := app.Group("/v1")
 	zerologLogger := log.Zerolog()
-	authHandler := middlewarekit.CombinedAuth(middlewarekit.AuthConfig{
-		HMACConfig: &middlewarekit.HMACConfig{
-			KeyProvider: config.GetHMACSecret,
+	authHandler := mwfiber.CombinedAuth(mwfiber.AuthConfig{
+		AuthConfig: middlewarekit.AuthConfig{
+			HMACConfig: &middlewarekit.HMACConfig{
+				KeyProvider: config.GetHMACSecret,
+			},
+			APIKeyConfig: &middlewarekit.APIKeyConfig{
+				APIKey: config.APIKey,
+			},
+			AllowNoAuth: config.AllowNoAuth(),
+			Logger:      &zerologLogger,
 		},
-		APIKeyConfig: &middlewarekit.APIKeyConfig{
-			APIKey: config.APIKey,
-		},
-		AllowNoAuth: config.AllowNoAuth(),
-		Logger:      &zerologLogger,
 	})
 
 	v1.Post("/enroll/start", authHandler, handler.EnrollStart(st, log))

@@ -7,6 +7,29 @@ The project follows [Semantic Versioning](https://semver.org/). Dates use the
 
 ## [Unreleased]
 
+### Changed
+
+- Upgraded every soulteary kit dependency to its latest major version:
+  `health-kit` v2.3.0 to v4.0.0, `logger-kit` v2.3.0 to v3.0.0, `metrics-kit`
+  v2.2.0 to v3.0.0, `middleware-kit` v2.2.0 to v3.0.0, `secure-kit` v1.6.0 to
+  v2.1.0, `version-kit` v2.2.0 to v4.0.0, and `redis-kit` v1.6.0 to v1.7.0.
+  A Go major version is a distinct import path, so each of these changed the
+  module path as well as the version.
+- Each kit moved its Fiber support out of the root package and into a
+  `fiberadapter` subpackage, so importing a kit's root package no longer links
+  Fiber and fasthttp. The router now calls `loggerfiber.Middleware`,
+  `healthfiber.Handler`, `metricsfiber.HandlerFor` and `mwfiber.CombinedAuth`,
+  and the Redis health check moved to the `redisprobe` subpackage of
+  `health-kit`. The Fiber-typed hooks moved with them, so the logger and
+  auth configurations are now the framework-neutral config embedded in the
+  adapter's own config type.
+- Build scripts inject the version through `version-kit/v4` rather than
+  `version-kit/v2`. A build left on the old path still compiles, but reports
+  its version as `dev`.
+
+The service contract is unchanged: routes, authentication outcomes, `/healthz`
+and `/metrics` responses, log fields and metric names are all as they were.
+
 ## [1.0.0] - 2026-08-26
 
 The first stable release defines the HTTP API, Redis-backed credential model,

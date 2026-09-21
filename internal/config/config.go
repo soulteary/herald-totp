@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/soulteary/cli-kit/env"
-	logger "github.com/soulteary/logger-kit/v2"
+	logger "github.com/soulteary/logger-kit/v3"
 )
 
 var log *logger.Logger
