@@ -2,7 +2,7 @@
 
 ## Requirements
 
-- Go 1.26+
+- Go 1.27.2+
 - Redis (for credentials, enrollments, backup codes, rate limits)
 
 ## Environment variables
