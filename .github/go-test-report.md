@@ -8,7 +8,7 @@
 | Passed | 119 |
 | Failed | 0 |
 | Skipped | 0 |
-| Coverage | 88.00% |
+| Coverage | 88.13% |
 | Threshold | 0.00% |
 
 ### Packages
@@ -22,6 +22,6 @@
 | internal/redistls | pass | 2 | 0 | 75.00% |
 | internal/router | pass | 8 | 0 | 93.55% |
 | internal/secret | pass | 4 | 0 | 91.67% |
-| internal/store | pass | 26 | 0 | 91.67% |
+| internal/store | pass | 26 | 0 | 92.13% |
 | internal/totp | pass | 8 | 0 | 100.00% |
 | pkg/heraldtotp | pass | 17 | 0 | 93.29% |

@@ -7,9 +7,9 @@
     "skipped": 0
   },
   "coverage": {
-    "covered_statements": 704,
+    "covered_statements": 705,
     "total_statements": 800,
-    "percentage": 88,
+    "percentage": 88.13,
     "threshold": 0
   },
   "packages": [
@@ -67,7 +67,7 @@
       "status": "pass",
       "tests": 26,
       "failed": 0,
-      "coverage": 91.67
+      "coverage": 92.13
     },
     {
       "name": "internal/totp",

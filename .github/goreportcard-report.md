@@ -22,6 +22,8 @@
 
 ### gocyclo
 
+- `internal/handler/verify.go`
+  - Line 39: cyclomatic complexity 24 for function Verify
 - `pkg/heraldtotp/client_test.go`
   - Line 139: cyclomatic complexity 20 for function TestClient_Status_Verify_Revoke
 - `internal/store/store.go`
@@ -31,8 +33,6 @@
   - Line 127: cyclomatic complexity 16 for function EnrollConfirm
 - `internal/config/config.go`
   - Line 91: cyclomatic complexity 25 for function Validate
-- `internal/handler/verify.go`
-  - Line 39: cyclomatic complexity 24 for function Verify
 
 ---
 
