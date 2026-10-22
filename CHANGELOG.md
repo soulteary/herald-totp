@@ -7,6 +7,15 @@ The project follows [Semantic Versioning](https://semver.org/). Dates use the
 
 ## [Unreleased]
 
+## [1.2.5] - 2026-10-22
+
+### Changed
+
+- Require Go 1.27.3 and align build images and CI toolchains.
+- Update compatible Go dependencies and published Kit versions; refresh module checksums.
+- Preserve the project toolchain after quality report generation.
+
+
 ## [1.2.3] - 2026-09-21
 
 ### Changed
