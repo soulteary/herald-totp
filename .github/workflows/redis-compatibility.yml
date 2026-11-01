@@ -1,0 +1,40 @@
+name: Redis compatibility
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+permissions:
+  contents: read
+
+jobs:
+  redis:
+    name: Real Redis enrollment, replay and TTL compatibility
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      redis:
+        image: docker.io/library/redis@sha256:6a12a187547eb2eac4da4528f9d9787d69f3848e513480baedfd75e3b2ac393e
+        ports:
+          - '127.0.0.1:6379:6379'
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 2s
+          --health-timeout 2s
+          --health-retries 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: Verify production Redis client and persistence contracts
+        env:
+          GOTOOLCHAIN: local
+          GOWORK: 'off'
+          HERALD_TOTP_REDIS_TEST_ADDR: 127.0.0.1:6379
+          HERALD_TOTP_REDIS_TEST_REQUIRED: '1'
+        run: go test -mod=readonly -race -count=1 -timeout=2m -run '^TestRedisCompatibility' ./internal/store

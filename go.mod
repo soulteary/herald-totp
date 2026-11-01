@@ -10,14 +10,14 @@ require (
 	github.com/prometheus/client_model v0.6.3
 	github.com/pterm/pterm v0.12.84
 	github.com/redis/go-redis/v9 v9.23.0
-	github.com/soulteary/cli-kit v1.9.2
-	github.com/soulteary/health-kit/v4 v4.0.4
-	github.com/soulteary/logger-kit/v3 v3.0.3
-	github.com/soulteary/metrics-kit/v3 v3.0.3
-	github.com/soulteary/middleware-kit/v3 v3.0.3
-	github.com/soulteary/redis-kit v1.7.3
-	github.com/soulteary/secure-kit/v2 v2.1.2
-	github.com/soulteary/version-kit/v4 v4.0.2
+	github.com/soulteary/cli-kit v1.9.3
+	github.com/soulteary/health-kit/v4 v4.0.5
+	github.com/soulteary/logger-kit/v3 v3.0.4
+	github.com/soulteary/metrics-kit/v3 v3.0.4
+	github.com/soulteary/middleware-kit/v3 v3.0.4
+	github.com/soulteary/redis-kit v1.8.1
+	github.com/soulteary/secure-kit/v2 v2.1.3
+	github.com/soulteary/version-kit/v4 v4.0.3
 )
 
 require (
@@ -29,7 +29,7 @@ require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/clipperhouse/uax29/v2 v2.7.0 // indirect
 	github.com/containerd/console v1.0.5 // indirect
-	github.com/gofiber/schema v1.9.1 // indirect
+	github.com/gofiber/schema v1.9.2 // indirect
 	github.com/gofiber/utils/v2 v2.6.3 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/klauspost/compress v1.20.3 // indirect
@@ -39,9 +39,10 @@ require (
 	github.com/mattn/go-runewidth v0.0.31 // indirect
 	github.com/molecule-man/go-brrr v1.3.1 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
+	github.com/pandatix/go-abnf v0.5.5 // indirect
 	github.com/philhofer/fwd v1.2.1 // indirect
-	github.com/prometheus/common v0.72.1 // indirect
-	github.com/prometheus/procfs v0.22.0 // indirect
+	github.com/prometheus/common v0.73.1 // indirect
+	github.com/prometheus/procfs v0.23.0 // indirect
 	github.com/rs/zerolog v1.35.1 // indirect
 	github.com/tinylib/msgp v1.6.5 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
