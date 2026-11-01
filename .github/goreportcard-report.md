@@ -1,11 +1,11 @@
 # Go Report Card
 
-**Grade: A+** (97.9%)
+**Grade: A+** (97.7%)
 
 | Metric | Value |
 | ------ | ----- |
-| Files | 28 |
-| Issues | 5 |
+| Files | 31 |
+| Issues | 6 |
 
 ## Checks
 
@@ -13,7 +13,7 @@
 | ----- | ----- |
 | gofmt | 100% |
 | go_vet | 100% |
-| gocyclo | 82% |
+| gocyclo | 80% |
 | ineffassign | 100% |
 | license | 100% |
 | misspell | 100% |
@@ -22,6 +22,11 @@
 
 ### gocyclo
 
+- `internal/handler/failure_paths_test.go`
+  - Line 96: cyclomatic complexity 32 for function TestVerifyAndRevokeStorageFailures
+  - Line 20: cyclomatic complexity 26 for function TestEnrollmentConflictsAndCommitFailures
+- `internal/config/config.go`
+  - Line 91: cyclomatic complexity 25 for function Validate
 - `internal/handler/verify.go`
   - Line 39: cyclomatic complexity 24 for function Verify
 - `pkg/heraldtotp/client_test.go`
@@ -31,8 +36,6 @@
   - Line 454: cyclomatic complexity 17 for function (*Store).ConsumeBackupCodeAndClaimChallenge
 - `internal/handler/enroll.go`
   - Line 127: cyclomatic complexity 16 for function EnrollConfirm
-- `internal/config/config.go`
-  - Line 91: cyclomatic complexity 25 for function Validate
 
 ---
 
