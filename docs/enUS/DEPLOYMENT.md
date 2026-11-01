@@ -2,7 +2,7 @@
 
 ## Requirements
 
-- Go 1.27.2+
+- Go 1.27.3+
 - Redis (for credentials, enrollments, backup codes, rate limits)
 
 ## Environment variables
@@ -70,7 +70,7 @@ Each release publishes Linux, macOS, and Windows binaries plus
 `checksums.txt`. Multi-architecture container images are published to GHCR:
 
 ```bash
-docker pull ghcr.io/soulteary/herald-totp:v1.0.0
+docker pull ghcr.io/soulteary/herald-totp:v1.2.6
 ```
 
 Use the full version tag for reproducible deployments. The release workflow

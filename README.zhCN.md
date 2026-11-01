@@ -9,7 +9,7 @@
 
 herald-totp 是 Herald/Stargate 栈的 TOTP 双因素认证服务：**绑定（enroll）**、**验证（verify）**、以及可选的**恢复码（backup codes）**。不发送验证码，用户通过验证器应用（如 Google Authenticator）生成 TOTP。Stargate 按用户调用 herald-totp 进行 TOTP 校验，而非使用单一全局密钥。
 
-HTTP 服务当前使用 Fiber v3.5.0 及与之匹配的 Fiber 相关 kit v2 模块版本。从源码构建需要 Go 1.27.3 或更高版本；依赖的精确版本以 `go.mod` 为准。
+HTTP 服务当前使用 Fiber v3 及兼容的 kit 包（精确模块版本见 `go.mod`）。从源码构建需要 Go 1.27.3 或更高版本；依赖的精确版本以 `go.mod` 为准。
 
 ## 核心特性
 
@@ -113,7 +113,7 @@ docker run -d --name herald-totp --network herald-totp -p 8084:8084 \
 可选：添加 `-e API_KEY=your_shared_secret`，并在 Stargate 侧将 `HERALD_TOTP_API_KEY` 设为相同值。
 
 正式版本镜像同时发布到 GHCR。部署时建议使用不可变版本标签，例如
-`ghcr.io/soulteary/herald-totp:v1.0.0`。
+`ghcr.io/soulteary/herald-totp:v1.2.6`。
 
 ## 文档
 

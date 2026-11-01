@@ -7,6 +7,18 @@ The project follows [Semantic Versioning](https://semver.org/). Dates use the
 
 ## [Unreleased]
 
+## [1.2.6] - 2026-11-02
+
+### Tests
+
+- Verify startup and graceful shutdown, enrollment conflicts, persistence failures,
+  transaction contention exhaustion, Redis TLS trust and client error contracts.
+- Test a real Redis commit followed by a simulated lost acknowledgement: retries
+  retain the committed verification counter and challenge and reject reuse.
+- Enforce at least 95% total statement coverage without excluding production code.
+- Correct current Go and kit module requirements in English and Chinese guides.
+
+
 ### Changed
 
 - Upgrade `health-kit/v4` from v4.0.2 to v4.0.4 and `middleware-kit/v3`
