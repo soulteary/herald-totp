@@ -120,10 +120,7 @@ func TestVerifyAndRevokeStorageFailures(t *testing.T) {
 				challenge = "failure-challenge"
 			}
 			mr.Server().SetPreHook(func(peer *server.Peer, cmd string, args ...string) bool {
-				fail := false
-				if scenario == "credential read" && strings.EqualFold(cmd, "GET") && len(args) > 0 && args[0] == "totp:cred:failure-user" {
-					fail = true
-				}
+				fail := scenario == "credential read" && strings.EqualFold(cmd, "GET") && len(args) > 0 && args[0] == "totp:cred:failure-user"
 				if scenario == "counter commit" && strings.EqualFold(cmd, "WATCH") {
 					fail = true
 				}
