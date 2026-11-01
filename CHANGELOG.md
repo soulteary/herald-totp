@@ -7,6 +7,17 @@ The project follows [Semantic Versioning](https://semver.org/). Dates use the
 
 ## [Unreleased]
 
+### Tests
+
+- Verify real startup failures and the shutdown deadline for an enrollment
+  blocked on entropy. Cover unavailable random sources without committing a
+  credential or consuming enrollment state.
+- Verify TLS trust fallback, Redis authentication failures, corrupt/rebound
+  enrollment records and a challenge claimed after verification prechecks.
+- Raise the CI coverage floor from 95% to 98%; Linux race tests reach 98.0%
+  total statement coverage while retaining defensive production error paths.
+  API, configuration, stored records and replay guarantees are unchanged.
+
 ## [1.2.6] - 2026-11-02
 
 ### Tests

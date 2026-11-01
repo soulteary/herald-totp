@@ -422,3 +422,26 @@ func TestHTTPErrorDiagnosticAndBodyBound(t *testing.T) {
 		t.Fatalf("summary length=%d", len(got))
 	}
 }
+
+func TestStatusRejectsNonSuccessAndRevokeBoundsMalformedResponse(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/v1/status" {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = w.Write([]byte(`{"totp_enabled":false}`))
+			return
+		}
+		_, _ = w.Write([]byte(strings.Repeat("X", 250)))
+	}))
+	defer server.Close()
+	client, err := NewClient(DefaultOptions().WithBaseURL(server.URL))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status, err := client.Status(context.Background(), "test-subject"); status != nil || err == nil || !strings.Contains(err.Error(), "status returned 503") {
+		t.Fatalf("status result=%+v error=%v", status, err)
+	}
+	result, err := client.Revoke(context.Background(), "test-subject")
+	if result != nil || err == nil || !strings.Contains(err.Error(), strings.Repeat("X", 200)+"...") || strings.Contains(err.Error(), strings.Repeat("X", 201)) {
+		t.Fatalf("malformed revoke response was not bounded: result=%+v error=%v", result, err)
+	}
+}

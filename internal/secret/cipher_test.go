@@ -2,6 +2,7 @@ package secret
 
 import (
 	"bytes"
+	"crypto/rand"
 	"testing"
 )
 
@@ -94,5 +95,15 @@ func TestEncryptInvalidKey(t *testing.T) {
 	_, err = Decrypt(keyBad, enc)
 	if err == nil {
 		t.Error("Decrypt with wrong key should error")
+	}
+}
+
+func TestEncryptRejectsUnavailableNonce(t *testing.T) {
+	old := rand.Reader
+	rand.Reader = bytes.NewReader(nil)
+	t.Cleanup(func() { rand.Reader = old })
+	encoded, err := Encrypt([]byte("0123456789abcdef0123456789abcdef"), "test-secret")
+	if err == nil || encoded != "" {
+		t.Fatalf("unavailable nonce produced ciphertext=%q error=%v", encoded, err)
 	}
 }

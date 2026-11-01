@@ -1,11 +1,14 @@
 package handler
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	secure "github.com/soulteary/secure-kit/v2"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -167,5 +170,55 @@ func TestVerifyAndRevokeStorageFailures(t *testing.T) {
 				t.Fatalf("response=%+v", out)
 			}
 		})
+	}
+}
+
+func TestBackupVerificationRejectsChallengeClaimedAfterPrecheck(t *testing.T) {
+	st, mr, log := setupHandlerTest(t)
+	defer mr.Close()
+	oldKey := config.EncryptionKey
+	config.EncryptionKey = testEncryptionKey
+	t.Cleanup(func() { config.EncryptionKey = oldKey })
+	encrypted, err := secret.Encrypt([]byte(testEncryptionKey), "JBSWY3DPEHPK3PXP")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.SaveCredential(context.Background(), &store.Credential{Subject: "racing-subject", Enabled: true, SecretEnc: encrypted, Period: 30, Digits: 6}); err != nil {
+		t.Fatal(err)
+	}
+	const code = "AAAA-BBBB-CCCC-DDDD"
+	if err := st.SaveBackupCodes(context.Background(), "racing-subject", []store.BackupCodeEntry{{CodeHash: secure.GetSHA256Hash(normalizeBackupCode(code))}}); err != nil {
+		t.Fatal(err)
+	}
+	var reads atomic.Int32
+	mr.Server().SetPreHook(func(peer *server.Peer, command string, args ...string) bool {
+		if strings.EqualFold(command, "EXISTS") && len(args) > 0 && args[0] == "totp:ch_used:racing-challenge" && reads.Add(1) == 2 {
+			if err := mr.Set(args[0], "1"); err != nil {
+				peer.WriteError("ERR concurrent claim injection failed")
+				return true
+			}
+		}
+		return false
+	})
+	app := fiber.New()
+	app.Post("/verify", Verify(st, log))
+	payload, _ := json.Marshal(VerifyRequest{Subject: "racing-subject", Code: code, ChallengeID: "racing-challenge"})
+	req := httptest.NewRequest(http.MethodPost, "/verify", bytes.NewReader(payload))
+	req.Header.Set("Content-Type", "application/json")
+	response, err := app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = response.Body.Close() }()
+	var out VerifyErrorResponse
+	if err := json.NewDecoder(response.Body).Decode(&out); err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != 400 || out.OK || out.Reason != "replay" {
+		t.Fatalf("racing challenge response=%d %+v", response.StatusCode, out)
+	}
+	entries, err := st.GetBackupCodes(context.Background(), "racing-subject")
+	if err != nil || len(entries) != 1 || entries[0].UsedAt != 0 {
+		t.Fatalf("rejected replay consumed backup code: %+v %v", entries, err)
 	}
 }
