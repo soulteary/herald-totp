@@ -70,7 +70,7 @@ Each release publishes Linux, macOS, and Windows binaries plus
 `checksums.txt`. Multi-architecture container images are published to GHCR:
 
 ```bash
-docker pull ghcr.io/soulteary/herald-totp:v1.2.6
+docker pull ghcr.io/soulteary/herald-totp:v1.2.7
 ```
 
 Use the full version tag for reproducible deployments. The release workflow
