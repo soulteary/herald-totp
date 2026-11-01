@@ -7,6 +7,8 @@ The project follows [Semantic Versioning](https://semver.org/). Dates use the
 
 ## [Unreleased]
 
+## [1.2.7] - 2026-11-02
+
 ### Tests
 
 - Verify real startup failures and the shutdown deadline for an enrollment
@@ -131,7 +133,8 @@ Existing credential and backup-code records keep their Redis key and JSON
 formats. Backup codes issued before v1.0.0 remain valid until consumed or the
 credential is revoked; only newly generated codes use the longer format.
 
-[Unreleased]: https://github.com/soulteary/herald-totp/compare/v1.2.6...HEAD
+[Unreleased]: https://github.com/soulteary/herald-totp/compare/v1.2.7...HEAD
+[1.2.7]: https://github.com/soulteary/herald-totp/compare/v1.2.6...v1.2.7
 [1.2.6]: https://github.com/soulteary/herald-totp/compare/v1.2.5...v1.2.6
 [1.2.5]: https://github.com/soulteary/herald-totp/compare/v1.2.4...v1.2.5
 [1.2.3]: https://github.com/soulteary/herald-totp/compare/v1.2.2...v1.2.3
