@@ -14,7 +14,9 @@ The project follows [Semantic Versioning](https://semver.org/). Dates use the
   credential or consuming enrollment state.
 - Verify TLS trust fallback, Redis authentication failures, corrupt/rebound
   enrollment records and a challenge claimed after verification prechecks.
-- Raise the CI coverage floor from 95% to 98%; Linux race tests reach 98.0%
+- Verify existing rejection of explicit-nonce GCM under strict FIPS runtime
+  policy in an isolated subprocess.
+- Raise the CI coverage floor from 95% to 98%; Linux race tests reach 98.3%
   total statement coverage while retaining defensive production error paths.
   API, configuration, stored records and replay guarantees are unchanged.
 

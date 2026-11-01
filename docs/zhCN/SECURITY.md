@@ -17,6 +17,7 @@
 
 ## 生产环境建议
 
+- **运行策略**：当前显式 nonce 的 AES-GCM 编码不支持 Go `GODEBUG=fips140=only` 模式，加解密会返回错误。这是原有运行限制；测试覆盖了 [Go GCM 策略拒绝路径](https://go.dev/src/crypto/cipher/gcm.go)。
 - **网络**：将 herald-totp 部署在内网或私有网络中，仅允许 Stargate（或统一网关）访问；不要将 herald-totp 直接暴露到公网，除非在 HTTPS 与严格访问控制之后。
 - **HTTPS**：若 herald-totp 会经过公网或不可信网络被访问，应在其前增加带 TLS 的反向代理（如 Traefik、nginx）。此时 Stargate 的 `HERALD_TOTP_BASE_URL` 应使用 `https://`。
 - **最小权限**：使用非 root 用户运行进程。官方容器已配置为数值用户和用户组 `10001:10001`。
