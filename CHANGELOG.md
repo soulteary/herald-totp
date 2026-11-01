@@ -21,9 +21,19 @@ The project follows [Semantic Versioning](https://semver.org/). Dates use the
 
 ### Changed
 
-- Upgrade `health-kit/v4` from v4.0.2 to v4.0.4 and `middleware-kit/v3`
-  from v3.0.2 to v3.0.3; refresh the required Fiber/network
-  dependency graph and module checksums.
+- Update `cli-kit` to v1.9.3, `health-kit/v4` to v4.0.5,
+  `logger-kit/v3` and `metrics-kit/v3` to v3.0.4, `middleware-kit/v3`
+  to v3.0.4, `redis-kit` to v1.8.1, `secure-kit/v2` to v2.1.3 and
+  `version-kit/v4` to v4.0.3; refresh the required transitive graph and checksums.
+
+### Upgrading from v1.2.5
+
+- Pin the binary or container to v1.2.6. HTTP routes, HMAC authentication,
+  environment variables and stored Redis credential formats remain compatible;
+  no data migration or encryption-key change is required.
+- Keep the existing encryption key and Redis data. The Redis integration tests
+  verify enrollment, replay prevention, single-use backup codes, expiry and
+  ambiguous commit acknowledgements against a real server.
 
 ## [1.2.5] - 2026-10-22
 
@@ -108,6 +118,8 @@ Existing credential and backup-code records keep their Redis key and JSON
 formats. Backup codes issued before v1.0.0 remain valid until consumed or the
 credential is revoked; only newly generated codes use the longer format.
 
-[Unreleased]: https://github.com/soulteary/herald-totp/compare/v1.2.3...HEAD
+[Unreleased]: https://github.com/soulteary/herald-totp/compare/v1.2.6...HEAD
+[1.2.6]: https://github.com/soulteary/herald-totp/compare/v1.2.5...v1.2.6
+[1.2.5]: https://github.com/soulteary/herald-totp/compare/v1.2.4...v1.2.5
 [1.2.3]: https://github.com/soulteary/herald-totp/compare/v1.2.2...v1.2.3
 [1.0.0]: https://github.com/soulteary/herald-totp/compare/v0.6.0...v1.0.0
