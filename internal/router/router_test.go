@@ -2,11 +2,15 @@ package router
 
 import (
 	"bytes"
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
+	"crypto/tls"
 	"encoding/hex"
+	"encoding/pem"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strconv"
 	"testing"
@@ -425,5 +429,37 @@ func TestSetup_AuthAllowNoAuth(t *testing.T) {
 				t.Errorf("unauthenticated request status = %d, want 401", got)
 			}
 		})
+	}
+}
+
+func TestSetupUsesTLSAndRejectsRedisAuthenticationFailure(t *testing.T) {
+	certificateServer := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(204) }))
+	defer certificateServer.Close()
+	caPath := filepath.Join(t.TempDir(), "redis-ca.pem")
+	if err := os.WriteFile(caPath, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certificateServer.Certificate().Raw}), 0600); err != nil {
+		t.Fatal(err)
+	}
+	mr := miniredis.NewMiniRedis()
+	if err := mr.StartTLS(&tls.Config{Certificates: certificateServer.TLS.Certificates, MinVersion: tls.VersionTLS12}); err != nil {
+		t.Fatal(err)
+	}
+	defer mr.Close()
+	oldAddr, oldPassword, oldTLS, oldCA := config.RedisAddr, config.RedisPassword, config.RedisTLSEnabled, config.RedisTLSCAFile
+	t.Cleanup(func() {
+		config.RedisAddr, config.RedisPassword, config.RedisTLSEnabled, config.RedisTLSCAFile = oldAddr, oldPassword, oldTLS, oldCA
+	})
+	config.RedisAddr, config.RedisPassword, config.RedisTLSEnabled, config.RedisTLSCAFile = mr.Addr(), "", true, caPath
+	log := logger.New(logger.Config{Level: logger.Disabled})
+	st, err := Setup(fiber.New(), log)
+	if err != nil || st == nil {
+		t.Fatalf("TLS setup store=%v error=%v", st, err)
+	}
+	if credential, err := st.GetCredential(context.Background(), "missing-subject"); err != nil || credential != nil {
+		t.Fatalf("TLS Redis operation credential=%+v error=%v", credential, err)
+	}
+	mr.RequireAuth("test-redis-password")
+	config.RedisPassword = "incorrect-test-password"
+	if st, err := Setup(fiber.New(), log); err == nil || st != nil {
+		t.Fatalf("invalid Redis authentication did not fail closed: %v %v", st, err)
 	}
 }

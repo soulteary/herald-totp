@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"errors"
+	"fmt"
 	"github.com/alicebob/miniredis/v2/server"
 	"strings"
 	"testing"
@@ -54,6 +55,7 @@ func TestTransactionContentionExhaustionFailsClosed(t *testing.T) {
 func TestTransactionReadFailuresPreserveState(t *testing.T) {
 	for _, tt := range []struct{ name, command, key string }{
 		{"credential challenge", "EXISTS", chUsedPrefix + "challenge"},
+		{"enrollment record", "GET", enrollPrefix + "enroll"},
 		{"enrollment index", "GET", enrollSubjectPrefix + "user"},
 		{"enrollment credential", "EXISTS", credPrefix + "user"},
 		{"backup read", "GET", backupPrefix + "user"},
@@ -91,12 +93,68 @@ func TestTransactionReadFailuresPreserveState(t *testing.T) {
 			default:
 				ok, err = st.ConsumeBackupCodeAndClaimChallenge(ctx, "user", "hash", "challenge")
 			}
-			if ok || err == nil {
+			if ok || err == nil || !strings.Contains(err.Error(), "injected read failure") {
 				t.Fatalf("read failure=(%v,%v)", ok, err)
 			}
 			if after := mr.Dump(); after != before {
 				t.Fatal("read failure changed stored state")
 			}
 		})
+	}
+}
+
+func TestConfirmationRejectsCorruptOrReboundEnrollment(t *testing.T) {
+	for _, corrupt := range []bool{false, true} {
+		t.Run(fmt.Sprint(corrupt), func(t *testing.T) {
+			st, mr := newTestStore(t)
+			defer mr.Close()
+			ctx := context.Background()
+			enrollment := &Enrollment{EnrollID: "old-enrollment", Subject: "subject", SecretEnc: "encrypted"}
+			if err := st.SaveEnrollment(ctx, enrollment); err != nil {
+				t.Fatal(err)
+			}
+			if corrupt {
+				if err := mr.Set(enrollPrefix+enrollment.EnrollID, "{"); err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				if err := mr.Set(enrollSubjectPrefix+enrollment.Subject, "new-enrollment"); err != nil {
+					t.Fatal(err)
+				}
+			}
+			before := mr.Dump()
+			confirmed, err := st.ConfirmEnrollment(ctx, enrollment, &Credential{Subject: enrollment.Subject, SecretEnc: enrollment.SecretEnc}, nil)
+			if confirmed || (corrupt && err == nil) || (!corrupt && err != nil) {
+				t.Fatalf("confirmation=(%v,%v), corrupt=%v", confirmed, err, corrupt)
+			}
+			if mr.Dump() != before {
+				t.Fatal("rejected confirmation changed stored state")
+			}
+		})
+	}
+}
+
+func TestUsedChallengeDoesNotAdvanceCredentialCounter(t *testing.T) {
+	st, mr := newTestStore(t)
+	defer mr.Close()
+	ctx := context.Background()
+	original := &Credential{Subject: "replay-subject", Enabled: true, LastUsedStep: 1, UpdatedAt: 1}
+	if err := st.SaveCredential(ctx, original); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.MarkChallengeUsed(ctx, "used-challenge"); err != nil {
+		t.Fatal(err)
+	}
+	claimed, err := st.ClaimCredentialStepAndChallenge(ctx, original.Subject, 2, 2, "used-challenge")
+	if err != nil || claimed {
+		t.Fatalf("used challenge claim=(%v,%v)", claimed, err)
+	}
+	current, err := st.GetCredential(ctx, original.Subject)
+	if err != nil || current == nil || current.LastUsedStep != 1 || current.UpdatedAt != 1 {
+		t.Fatalf("rejected challenge advanced credential: %+v %v", current, err)
+	}
+	claimed, err = st.ClaimCredentialStepAndChallenge(ctx, original.Subject, 2, 2, "new-challenge")
+	if err != nil || !claimed {
+		t.Fatalf("rejected replay lost the unused counter: %v %v", claimed, err)
 	}
 }

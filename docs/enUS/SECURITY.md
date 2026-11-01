@@ -17,6 +17,7 @@ This document describes security considerations and recommendations for herald-t
 
 ## Production Recommendations
 
+- **Runtime policy**: The current explicit-nonce AES-GCM encoding is unsupported under Go `GODEBUG=fips140=only`; encryption and decryption return errors. This is an existing operating limit; the tests cover the [Go GCM policy rejection](https://go.dev/src/crypto/cipher/gcm.go).
 - **Network**: Run herald-totp in a private network. Only Stargate (or your gateway) should call it; do not expose herald-totp directly to the public internet unless behind HTTPS and strict access control.
 - **HTTPS**: If herald-totp is reachable over the internet or across untrusted networks, put it behind a reverse proxy (e.g. Traefik, nginx) with TLS. Stargate should use `https://` for `HERALD_TOTP_BASE_URL` in that case.
 - **Least privilege**: Run the process with a non-root user. The official container is configured as the numeric user and group `10001:10001`.
