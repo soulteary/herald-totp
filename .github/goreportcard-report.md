@@ -1,11 +1,11 @@
 # Go Report Card
 
-**Grade: A+** (97.7%)
+**Grade: A+** (97.4%)
 
 | Metric | Value |
 | ------ | ----- |
-| Files | 31 |
-| Issues | 6 |
+| Files | 32 |
+| Issues | 7 |
 
 ## Checks
 
@@ -13,7 +13,7 @@
 | ----- | ----- |
 | gofmt | 100% |
 | go_vet | 100% |
-| gocyclo | 80% |
+| gocyclo | 78% |
 | ineffassign | 100% |
 | license | 100% |
 | misspell | 100% |
@@ -22,9 +22,14 @@
 
 ### gocyclo
 
+- `internal/handler/enroll.go`
+  - Line 127: cyclomatic complexity 16 for function EnrollConfirm
 - `internal/handler/failure_paths_test.go`
-  - Line 96: cyclomatic complexity 32 for function TestVerifyAndRevokeStorageFailures
-  - Line 20: cyclomatic complexity 26 for function TestEnrollmentConflictsAndCommitFailures
+  - Line 99: cyclomatic complexity 32 for function TestVerifyAndRevokeStorageFailures
+  - Line 23: cyclomatic complexity 26 for function TestEnrollmentConflictsAndCommitFailures
+  - Line 176: cyclomatic complexity 17 for function TestBackupVerificationRejectsChallengeClaimedAfterPrecheck
+- `main_test.go`
+  - Line 143: cyclomatic complexity 25 for function TestMainBoundsShutdownWhileEnrollmentEntropyIsBlocked
 - `internal/config/config.go`
   - Line 91: cyclomatic complexity 25 for function Validate
 - `internal/handler/verify.go`
@@ -34,8 +39,6 @@
 - `internal/store/store.go`
   - Line 298: cyclomatic complexity 19 for function (*Store).ConfirmEnrollment
   - Line 454: cyclomatic complexity 17 for function (*Store).ConsumeBackupCodeAndClaimChallenge
-- `internal/handler/enroll.go`
-  - Line 127: cyclomatic complexity 16 for function EnrollConfirm
 
 ---
 
