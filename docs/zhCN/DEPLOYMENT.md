@@ -64,7 +64,7 @@ go run .
 并向 GHCR 发布多架构容器镜像：
 
 ```bash
-docker pull ghcr.io/soulteary/herald-totp:v1.0.0
+docker pull ghcr.io/soulteary/herald-totp:v1.2.6
 ```
 
 部署时应使用完整版本标签以保证结果可复现。发布流程也会生成不带前导 `v`

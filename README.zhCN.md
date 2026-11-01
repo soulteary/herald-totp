@@ -113,7 +113,7 @@ docker run -d --name herald-totp --network herald-totp -p 8084:8084 \
 可选：添加 `-e API_KEY=your_shared_secret`，并在 Stargate 侧将 `HERALD_TOTP_API_KEY` 设为相同值。
 
 正式版本镜像同时发布到 GHCR。部署时建议使用不可变版本标签，例如
-`ghcr.io/soulteary/herald-totp:v1.0.0`。
+`ghcr.io/soulteary/herald-totp:v1.2.6`。
 
 ## 文档
 
