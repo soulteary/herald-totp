@@ -1,7 +1,12 @@
 package redistls
 
 import (
+	"context"
 	"crypto/tls"
+	"encoding/pem"
+	"errors"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
@@ -30,5 +35,33 @@ func TestConfig_CAErrors(t *testing.T) {
 	}
 	if _, err := Config("", path, false); err == nil {
 		t.Fatal("Config invalid CA file: expected error")
+	}
+}
+
+func TestDialerUsesConfiguredTrustAndHonorsCancellation(t *testing.T) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusNoContent) }))
+	defer server.Close()
+	path := filepath.Join(t.TempDir(), "ca.pem")
+	if err := os.WriteFile(path, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: server.Certificate().Raw}), 0600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Config("", path, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.RootCAs == nil {
+		t.Fatal("custom trust roots were not loaded")
+	}
+	conn, err := Dialer(cfg)(context.Background(), "tcp", server.Listener.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := conn.Close(); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := Dialer(cfg)(ctx, "tcp", server.Listener.Addr().String()); !errors.Is(err, context.Canceled) {
+		t.Fatalf("dial error=%v", err)
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"sync"
 	"sync/atomic"
@@ -165,5 +166,47 @@ func waitForRedisCompatibilityExpiry(t *testing.T, ctx context.Context, rdb *red
 		case <-ctx.Done():
 			t.Fatal(ctx.Err())
 		}
+	}
+}
+
+// The transaction reaches Redis, but its acknowledgement is lost to the caller.
+// A retry must observe the committed counter/challenge instead of accepting twice.
+type lostCommitReplyHook struct{ fired atomic.Bool }
+
+func (h *lostCommitReplyHook) DialHook(next redis.DialHook) redis.DialHook          { return next }
+func (h *lostCommitReplyHook) ProcessHook(next redis.ProcessHook) redis.ProcessHook { return next }
+func (h *lostCommitReplyHook) ProcessPipelineHook(next redis.ProcessPipelineHook) redis.ProcessPipelineHook {
+	return func(ctx context.Context, commands []redis.Cmder) error {
+		err := next(ctx, commands)
+		if err == nil && len(commands) > 0 && commands[0].Name() == "multi" && h.fired.CompareAndSwap(false, true) {
+			return io.ErrUnexpectedEOF
+		}
+		return err
+	}
+}
+
+func TestRedisCompatibilityLostCommitReply(t *testing.T) {
+	st, ctx, subject := realRedisCompatibilityStore(t)
+	requireRedisCompatibilityNoError(t, st.SaveCredential(ctx, &Credential{Subject: subject, Enabled: true, LastUsedStep: 1}))
+	hook := &lostCommitReplyHook{}
+	st.rdb.AddHook(hook)
+	claimed, err := st.ClaimCredentialStepAndChallenge(ctx, subject, 10, 10, subject)
+	if claimed || !errors.Is(err, io.ErrUnexpectedEOF) || !hook.fired.Load() {
+		t.Fatalf("lost reply = (%v,%v), injected=%v", claimed, err, hook.fired.Load())
+	}
+	current, err := st.GetCredential(ctx, subject)
+	requireRedisCompatibilityNoError(t, err)
+	if current == nil || current.LastUsedStep != 10 {
+		t.Fatalf("commit was not persisted: %+v", current)
+	}
+	used, err := st.IsChallengeUsed(ctx, subject)
+	requireRedisCompatibilityNoError(t, err)
+	if !used {
+		t.Fatal("committed challenge was not retained")
+	}
+	claimed, err = st.ClaimCredentialStepAndChallenge(ctx, subject, 10, 11, subject)
+	requireRedisCompatibilityNoError(t, err)
+	if claimed {
+		t.Fatal("retry accepted the same verification after lost acknowledgement")
 	}
 }

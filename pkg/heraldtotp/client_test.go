@@ -405,3 +405,20 @@ func TestClient_WithHMACSecret(t *testing.T) {
 		t.Errorf("Status: got subject=%q totp_enabled=%v", statusResp.Subject, statusResp.TotpEnabled)
 	}
 }
+
+func TestHTTPErrorDiagnosticAndBodyBound(t *testing.T) {
+	for _, tt := range []struct {
+		err  HTTPError
+		want string
+	}{
+		{HTTPError{StatusCode: 401, Reason: "invalid", Body: "ignored"}, "herald-totp returned HTTP 401: invalid"},
+		{HTTPError{StatusCode: 503, Body: "unavailable"}, "herald-totp returned HTTP 503: unavailable"},
+	} {
+		if got := tt.err.Error(); got != tt.want {
+			t.Fatalf("error=%q, want %q", got, tt.want)
+		}
+	}
+	if got := responseBodySummary([]byte(strings.Repeat("x", 201))); got != strings.Repeat("x", 200)+"..." {
+		t.Fatalf("summary length=%d", len(got))
+	}
+}
