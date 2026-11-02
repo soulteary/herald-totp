@@ -22,16 +22,8 @@
 
 ### gocyclo
 
-- `internal/handler/enroll.go`
-  - Line 127: cyclomatic complexity 16 for function EnrollConfirm
-- `internal/handler/failure_paths_test.go`
-  - Line 99: cyclomatic complexity 32 for function TestVerifyAndRevokeStorageFailures
-  - Line 23: cyclomatic complexity 26 for function TestEnrollmentConflictsAndCommitFailures
-  - Line 176: cyclomatic complexity 17 for function TestBackupVerificationRejectsChallengeClaimedAfterPrecheck
 - `main_test.go`
-  - Line 143: cyclomatic complexity 25 for function TestMainBoundsShutdownWhileEnrollmentEntropyIsBlocked
-- `internal/config/config.go`
-  - Line 91: cyclomatic complexity 25 for function Validate
+  - Line 143: cyclomatic complexity 24 for function TestMainBoundsShutdownWhileEnrollmentEntropyIsBlocked
 - `internal/handler/verify.go`
   - Line 39: cyclomatic complexity 24 for function Verify
 - `pkg/heraldtotp/client_test.go`
@@ -39,6 +31,14 @@
 - `internal/store/store.go`
   - Line 298: cyclomatic complexity 19 for function (*Store).ConfirmEnrollment
   - Line 454: cyclomatic complexity 17 for function (*Store).ConsumeBackupCodeAndClaimChallenge
+- `internal/handler/enroll.go`
+  - Line 127: cyclomatic complexity 16 for function EnrollConfirm
+- `internal/handler/failure_paths_test.go`
+  - Line 99: cyclomatic complexity 32 for function TestVerifyAndRevokeStorageFailures
+  - Line 23: cyclomatic complexity 26 for function TestEnrollmentConflictsAndCommitFailures
+  - Line 176: cyclomatic complexity 17 for function TestBackupVerificationRejectsChallengeClaimedAfterPrecheck
+- `internal/config/config.go`
+  - Line 91: cyclomatic complexity 25 for function Validate
 
 ---
 
