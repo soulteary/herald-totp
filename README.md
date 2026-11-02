@@ -19,7 +19,7 @@ The HTTP server currently uses Fiber v3 and compatible kit packages (exact modul
 - **Status**: `GET /v1/status?subject=...` to check if a user has TOTP enabled.
 - **Backup codes**: 10 one-time codes returned on confirm; can be used in verify when the device is lost.
 - **Security**: Encrypted secret storage (AES-GCM), rate limiting, atomic one-time consumption of TOTP steps, backup codes, and challenge IDs, plus API key or HMAC auth.
-- **Graceful shutdown**: On `SIGINT` or `SIGTERM`, server stops accepting new requests and shuts down with a 10s timeout.
+- **Graceful shutdown**: On `SIGINT` or `SIGTERM`, server stops accepting new requests and shuts down with a 10s timeout. Successful shutdown exits 0; shutdown failure (including deadline expiry) logs `shutdown error` and exits 1 from v1.2.8. See the deployment guide for supervisor, retry and rollback requirements.
 
 ## Architecture
 
@@ -114,7 +114,7 @@ docker run -d --name herald-totp --network herald-totp -p 8084:8084 \
 Optional: add `-e API_KEY=your_shared_secret` and set `HERALD_TOTP_API_KEY` to the same value on Stargate.
 
 Released images are also available from GHCR. Use an immutable version tag for
-deployments, for example `ghcr.io/soulteary/herald-totp:v1.2.7`.
+deployments, for example `ghcr.io/soulteary/herald-totp:v1.2.8`.
 
 ## Documentation
 
@@ -141,7 +141,7 @@ Lint: `golangci-lint run`.
 
 ## Operation
 
-- **Graceful shutdown**: On `SIGINT` or `SIGTERM`, the server stops accepting new requests and shuts down with a 10s timeout. Logs `"shutting down"` and any shutdown error.
+- **Graceful shutdown**: On `SIGINT` or `SIGTERM`, the server stops accepting new requests and shuts down with a 10s timeout. Logs `"shutting down"` and any shutdown error. Successful shutdown exits 0; shutdown failure (including deadline expiry) logs `shutdown error` and exits 1 from v1.2.8. See the deployment guide for supervisor, retry and rollback requirements.
 - **Logging**: Structured JSON logs via [logger-kit](https://github.com/soulteary/logger-kit). Set `LOG_LEVEL` to `debug` for more detail.
 
 ## License

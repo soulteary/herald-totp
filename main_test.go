@@ -155,6 +155,9 @@ func TestMainBoundsShutdownWhileEnrollmentEntropyIsBlocked(t *testing.T) {
 		if ctx.Err() != nil || !errors.As(err, &exitErr) || exitErr.ExitCode() != 1 {
 			t.Fatalf("shutdown must exit 1: err=%v context=%v\n%s", err, ctx.Err(), output)
 		}
+		if strings.Contains(string(output), "--- FAIL:") {
+			t.Fatalf("shutdown helper assertions failed: %s", output)
+		}
 		if !strings.Contains(string(output), "shutdown error") || !strings.Contains(string(output), "context deadline exceeded") {
 			t.Fatalf("missing shutdown deadline diagnostic: %s", output)
 		}
