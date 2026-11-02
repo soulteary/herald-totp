@@ -87,6 +87,8 @@ sequenceDiagram
 
 ### 构建与运行（二进制）
 
+以下是可丢弃的本地 Docker 示例，会生成新密钥，且未配置具名 Redis 卷；不要针对已有凭据重复运行。生产环境或已有数据应按[部署指南](docs/zhCN/DEPLOYMENT.md)复用已保存的密钥并持久化 Redis。示例以 15 秒运行时宽限为固定 10 秒应用关闭预算留出余量；应按环境调整，避免 SIGKILL 抢在失败报告前发生。
+
 ```bash
 export HERALD_TOTP_ENCRYPTION_KEY="$(openssl rand -base64 24)"
 export REDIS_ADDR=localhost:6379
@@ -104,7 +106,7 @@ export HERALD_TOTP_ENCRYPTION_KEY="$(openssl rand -base64 24)"
 docker network create herald-totp
 docker run -d --name herald-totp-redis --network herald-totp redis:8-alpine
 docker build -t herald-totp .
-docker run -d --name herald-totp --network herald-totp -p 8084:8084 \
+docker run -d --name herald-totp --network herald-totp -p 8084:8084 --stop-timeout=15 \
   -e HERALD_TOTP_ENCRYPTION_KEY \
   -e REDIS_ADDR=herald-totp-redis:6379 \
   herald-totp

@@ -87,6 +87,8 @@ See [docs/enUS/DEPLOYMENT.md](docs/enUS/DEPLOYMENT.md) for full options.
 
 ### Build & run (binary)
 
+This is a disposable local Docker example. It generates a fresh key and does not configure a named Redis volume; do not rerun it against existing credentials. For production or existing data, reuse the provisioned key and persistent Redis storage as described in the [deployment guide](docs/enUS/DEPLOYMENT.md). The 15-second runtime grace leaves margin beyond the fixed 10-second application shutdown budget; adjust it for the environment so SIGKILL does not preempt failure reporting.
+
 ```bash
 export HERALD_TOTP_ENCRYPTION_KEY="$(openssl rand -base64 24)"
 export REDIS_ADDR=localhost:6379
@@ -105,7 +107,7 @@ export HERALD_TOTP_ENCRYPTION_KEY="$(openssl rand -base64 24)"
 docker network create herald-totp
 docker run -d --name herald-totp-redis --network herald-totp redis:8-alpine
 docker build -t herald-totp .
-docker run -d --name herald-totp --network herald-totp -p 8084:8084 \
+docker run -d --name herald-totp --network herald-totp -p 8084:8084 --stop-timeout=15 \
   -e HERALD_TOTP_ENCRYPTION_KEY \
   -e REDIS_ADDR=herald-totp-redis:6379 \
   herald-totp
