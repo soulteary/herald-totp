@@ -146,24 +146,24 @@ func TestMainBoundsShutdownWhileEnrollmentEntropyIsBlocked(t *testing.T) {
 		if coverage := flag.Lookup("test.gocoverdir"); coverage != nil && coverage.Value.String() != "" {
 			args = append(args, "-test.gocoverdir="+coverage.Value.String())
 		}
-		cmd := exec.Command(os.Args[0], args...)
+		ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
+		defer cancel()
+		cmd := exec.CommandContext(ctx, os.Args[0], args...)
 		cmd.Env = append(os.Environ(), "HERALD_TOTP_TEST_BLOCKED_SHUTDOWN=1")
-		if output, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("blocked shutdown process: %v\n%s", err, output)
+		output, err := cmd.CombinedOutput()
+		var exitErr *exec.ExitError
+		if ctx.Err() != nil || !errors.As(err, &exitErr) || exitErr.ExitCode() != 1 {
+			t.Fatalf("shutdown must exit 1: err=%v context=%v\n%s", err, ctx.Err(), output)
+		}
+		if strings.Contains(string(output), "--- FAIL:") {
+			t.Fatalf("shutdown helper assertions failed: %s", output)
+		}
+		if !strings.Contains(string(output), "shutdown error") || !strings.Contains(string(output), "context deadline exceeded") {
+			t.Fatalf("missing shutdown deadline diagnostic: %s", output)
 		}
 		return
 	}
 	mr := miniredis.RunT(t)
-	oldPort, oldAddr, oldKey, oldAPI := config.Port, config.RedisAddr, config.EncryptionKey, config.APIKey
-	oldReader, oldStdout, oldStderr := rand.Reader, os.Stdout, os.Stderr
-	output, writer, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	var logs bytes.Buffer
-	logsDone := make(chan struct{})
-	go func() { _, _ = io.Copy(&logs, output); close(logsDone) }()
-	os.Stdout, os.Stderr = writer, writer
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -174,31 +174,9 @@ func TestMainBoundsShutdownWhileEnrollmentEntropyIsBlocked(t *testing.T) {
 	config.RedisAddr = mr.Addr()
 	config.EncryptionKey = "0123456789abcdef0123456789abcdef"
 	config.APIKey = "shutdown-test-key"
-	entropy := &blockedEntropyReader{delegate: oldReader, entered: make(chan struct{}), release: make(chan struct{})}
-	var releaseOnce sync.Once
-	mainDone := make(chan struct{})
-	requestDone := make(chan struct{})
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(func() {
-		releaseOnce.Do(func() { close(entropy.release) })
-		cancel()
-		select {
-		case <-mainDone:
-		case <-time.After(5 * time.Second):
-			t.Error("main remained active during cleanup")
-		}
-		select {
-		case <-requestDone:
-		case <-time.After(5 * time.Second):
-			t.Error("request remained active during cleanup")
-		}
-		os.Stdout, os.Stderr = oldStdout, oldStderr
-		_ = writer.Close()
-		<-logsDone
-		_ = output.Close()
-		config.Port, config.RedisAddr, config.EncryptionKey, config.APIKey = oldPort, oldAddr, oldKey, oldAPI
-	})
+	entropy := &blockedEntropyReader{delegate: rand.Reader, entered: make(chan struct{}), release: make(chan struct{})}
 	rand.Reader = entropy
+	mainDone := make(chan struct{})
 	go func() { main(); close(mainDone) }()
 	client := &http.Client{Timeout: 30 * time.Second}
 	deadline := time.Now().Add(5 * time.Second)
@@ -207,20 +185,20 @@ func TestMainBoundsShutdownWhileEnrollmentEntropyIsBlocked(t *testing.T) {
 		if err == nil {
 			_ = response.Body.Close()
 			if response.StatusCode != 200 {
-				t.Fatalf("health status=%d", response.StatusCode)
+				t.Fatalf("health=%d", response.StatusCode)
 			}
 			break
 		}
 		if time.Now().After(deadline) {
-			close(requestDone)
 			t.Fatal("server did not start")
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
 	entropy.block.Store(true)
+	requestDone := make(chan struct{})
 	go func() {
 		defer close(requestDone)
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, "http://"+address+"/v1/enroll/start", strings.NewReader(`{"subject":"shutdown-entropy-test"}`))
+		req, err := http.NewRequest(http.MethodPost, "http://"+address+"/v1/enroll/start", strings.NewReader(`{"subject":"shutdown-entropy-test"}`))
 		if err != nil {
 			return
 		}
@@ -240,20 +218,16 @@ func TestMainBoundsShutdownWhileEnrollmentEntropyIsBlocked(t *testing.T) {
 	if err := syscall.Kill(os.Getpid(), syscall.SIGTERM); err != nil {
 		t.Fatal(err)
 	}
+	// Before the fix main returns here with success; the parent must reject that exit.
 	select {
 	case <-mainDone:
 	case <-time.After(15 * time.Second):
-		t.Fatal("main did not enforce shutdown deadline")
+		t.Fatal("shutdown deadline not enforced")
 	}
-	releaseOnce.Do(func() { close(entropy.release) })
+	close(entropy.release)
 	select {
 	case <-requestDone:
 	case <-time.After(5 * time.Second):
-		t.Fatal("enrollment did not finish after random source resumed")
-	}
-	_ = writer.Close()
-	<-logsDone
-	if !strings.Contains(logs.String(), "shutdown error") {
-		t.Fatalf("shutdown deadline was not reported: %s", logs.String())
+		t.Fatal("request did not finish")
 	}
 }

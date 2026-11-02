@@ -70,7 +70,7 @@ Each release publishes Linux, macOS, and Windows binaries plus
 `checksums.txt`. Multi-architecture container images are published to GHCR:
 
 ```bash
-docker pull ghcr.io/soulteary/herald-totp:v1.2.7
+docker pull ghcr.io/soulteary/herald-totp:v1.2.8
 ```
 
 Use the full version tag for reproducible deployments. The release workflow
@@ -106,3 +106,7 @@ also publishes SemVer aliases without the leading `v`.
 - Use API key or HMAC for service-to-service calls.
 - Run herald-totp in a private network; do not expose it to the public internet.
 - The official container runs as the unprivileged user and group `10001:10001`.
+
+## Shutdown exit status and upgrades
+
+From v1.2.8, successful signal-driven shutdown exits 0; any error from HTTP shutdown, including its deadline, logs the existing `shutdown error` warning and exits 1. The message, log fields/level, signal handling and shutdown budget are unchanged. This corrects failure reporting, not authentication, delivery or replay protection. A supervisor using restart-on-failure may now restart after a failed shutdown; check its policy and grace period. An unfinished operation may already have committed or been accepted upstream: reconcile uncertain results before retrying. No API, configuration, record format, migration or new mixed-version restriction is introduced; mixed versions differ in failure exit status. Rolling replacement needs no special order from v1.2.7. Rollback restores the misleading zero exit on shutdown failure and must retain warning-based monitoring. Preserve the Redis dataset and the same encryption key, including during rollback; existing older-enrollment/index upgrade restrictions still apply. Allow the supervisor more than the fixed 10-second shutdown budget so it can report a deadline before SIGKILL.

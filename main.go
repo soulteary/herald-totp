@@ -66,5 +66,6 @@ func main() {
 	defer cancel()
 	if err := app.ShutdownWithContext(ctx); err != nil {
 		log.Warn().Err(err).Msg("shutdown error")
+		os.Exit(1)
 	}
 }

@@ -19,7 +19,7 @@ HTTP 服务当前使用 Fiber v3 及兼容的 kit 包（精确模块版本见 `g
 - **状态**：`GET /v1/status?subject=...` 查询用户是否已开启 TOTP。
 - **恢复码**：确认绑定后返回 10 个一次性码，设备丢失时可用来验证。
 - **安全**：加密存储密钥（AES-GCM）、限流、原子化一次性消费 TOTP 时间步、恢复码和 challenge ID，以及 API Key 或 HMAC 鉴权。
-- **优雅关闭**：收到 `SIGINT` 或 `SIGTERM` 后停止接收新请求，在 10 秒超时内完成关闭。
+- **优雅关闭**：收到 `SIGINT` 或 `SIGTERM` 后停止接收新请求，在 10 秒超时内完成关闭。 从 v1.2.8 起，正常关闭退出 0，关闭失败（包括超过截止时间）记录 `shutdown error` 并退出 1；进程管理、重试与回滚要求见部署指南。
 
 ## 架构
 
@@ -113,7 +113,7 @@ docker run -d --name herald-totp --network herald-totp -p 8084:8084 \
 可选：添加 `-e API_KEY=your_shared_secret`，并在 Stargate 侧将 `HERALD_TOTP_API_KEY` 设为相同值。
 
 正式版本镜像同时发布到 GHCR。部署时建议使用不可变版本标签，例如
-`ghcr.io/soulteary/herald-totp:v1.2.7`。
+`ghcr.io/soulteary/herald-totp:v1.2.8`。
 
 ## 文档
 
@@ -140,7 +140,7 @@ go tool cover -html=coverage.out
 
 ## 运维
 
-- **优雅关闭**：收到 `SIGINT` 或 `SIGTERM` 后停止接收新请求，在 10 秒超时内完成关闭。会输出 "shutting down" 及关闭过程中的错误。
+- **优雅关闭**：收到 `SIGINT` 或 `SIGTERM` 后停止接收新请求，在 10 秒超时内完成关闭。会输出 "shutting down" 及关闭过程中的错误。 从 v1.2.8 起，正常关闭退出 0，关闭失败（包括超过截止时间）记录 `shutdown error` 并退出 1；进程管理、重试与回滚要求见部署指南。
 - **日志**：通过 [logger-kit](https://github.com/soulteary/logger-kit) 输出结构化 JSON 日志。需要更多细节时可设置 `LOG_LEVEL=debug`。
 
 ## 许可证
