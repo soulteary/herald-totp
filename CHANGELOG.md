@@ -19,6 +19,13 @@ The project follows [Semantic Versioning](https://semver.org/). Dates use the
 - Add a real subprocess regression that requires the shutdown diagnostic and
   exit status 1, with standard Go child coverage instrumentation.
 
+### Documentation
+
+- Give container stop-grace examples margin beyond the unchanged application
+  shutdown budget so forced termination does not preempt failure reporting.
+- Label the key-generating Docker example as disposable and point existing
+  deployments to the existing encryption-key reuse and Redis persistence guide.
+
 ## [1.2.7] - 2026-11-02
 
 ### Tests
