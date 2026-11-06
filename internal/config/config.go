@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/soulteary/cli-kit/env"
+	"github.com/soulteary/herald-totp/pkg/heraldtotp"
 	logger "github.com/soulteary/logger-kit/v3"
 )
 
@@ -133,6 +134,9 @@ func Validate() error {
 		for keyID, secret := range hmacKeysMap {
 			if strings.TrimSpace(keyID) == "" {
 				problems = append(problems, "HERALD_TOTP_HMAC_KEYS contains an empty key ID")
+			}
+			if len(keyID) > heraldtotp.MaxAuthIdentifierBytes {
+				problems = append(problems, "HERALD_TOTP_HMAC_KEYS key IDs must not exceed 128 bytes")
 			}
 			if secret == "" {
 				problems = append(problems, fmt.Sprintf("HERALD_TOTP_HMAC_KEYS key %q has an empty secret", keyID))
