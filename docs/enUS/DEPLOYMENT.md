@@ -40,6 +40,20 @@ opening the listen socket or initializing Redis.
 
 ## Run
 
+Enrollment confirmation shares the existing subject/hour and peer-IP/minute
+budgets with enrollment start, verification, and revocation. It counts the peer
+IP once even for an unknown enrollment ID; valid records use their stored subject
+before decrypting or checking the code. A rejected request returns 429; Redis
+quota failures fail closed without consuming the enrollment or creating a
+credential. Quotas use the upstream peer IP, which may be the shared Herald proxy.
+
+Allow at least two subject requests for a start and a successful confirmation,
+plus room for other operations and incorrect attempts. With
+`RATE_LIMIT_PER_SUBJECT=1`, starting enrollment exhausts the shared budget and
+confirmation is blocked until its hourly window resets; the pending enrollment
+may expire first. This patch adds confirmation to the shared budget rather than
+creating an independent quota. Choose limits for the complete enrollment flow.
+
 Generate the encryption key **once**, store it in your secret manager, and reuse
 the same value on every start:
 

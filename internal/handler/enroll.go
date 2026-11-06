@@ -134,6 +134,16 @@ func EnrollConfirm(st *store.Store, log *logger.Logger) fiber.Handler {
 			return respondBadRequest(c, "invalid_request", "enroll_id and code are required")
 		}
 
+		// Unknown enrollment IDs share the same trusted-peer IP budget. Count
+		// once here, then derive the subject budget from the stored record.
+		limited, err := ipRateLimitExceeded(c, st)
+		if err != nil {
+			return respondInternalError(c)
+		}
+		if limited {
+			return respondRateLimited(c)
+		}
+
 		keyBytes, err := secret.KeyBytes(config.EncryptionKey)
 		if err != nil || len(config.EncryptionKey) < 32 {
 			return respondConfigError(c, "")
@@ -146,6 +156,14 @@ func EnrollConfirm(st *store.Store, log *logger.Logger) fiber.Handler {
 		if e == nil {
 			metrics.RecordEnrollConfirm("failure")
 			return respondBadRequest(c, "expired", "enrollment not found or expired")
+		}
+
+		limited, err = subjectRateLimitExceeded(c, st, e.Subject)
+		if err != nil {
+			return respondInternalError(c)
+		}
+		if limited {
+			return respondRateLimited(c)
 		}
 
 		secretPlain, err := secret.Decrypt(keyBytes, e.SecretEnc)

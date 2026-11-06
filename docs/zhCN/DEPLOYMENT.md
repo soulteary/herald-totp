@@ -110,3 +110,15 @@ docker pull ghcr.io/soulteary/herald-totp:v2.0.0
 Docker 示例可设置 `--stop-timeout=15`（或 Compose `stop_grace_period: 15s`），为固定 10 秒应用预算留出余量，并按调度和日志输出情况调整。[Docker 宽限到期会发送 SIGKILL](https://docs.docker.com/reference/cli/docker/container/stop/)，两者截止时间相同可能使应用关闭警告和退出码 1 来不及报告。
 
 Redis 应使用持久存储并明确持久化策略。替换应用实例和回滚时须保留当前数据集及其卷，不要换成空 Redis 实例，也不要重新生成加密密钥。旧 enrollment 索引升级限制继续适用，见[安全指南](SECURITY.md)。这些存储与密钥要求在 v1.2.8 之前已经存在。
+
+### 注册确认配额
+
+注册确认与注册开始、验证、撤销共用 subject 每小时和对端 IP 每分钟配额。
+未知 enrollment ID 也计入 IP 配额；合法记录在解密和校验前按存储的 subject
+计数，每个确认请求只累计一次 IP。超限返回 429，Redis 配额错误拒绝请求，
+不消耗注册记录、不创建凭据。对端 IP 可能是共用的 Herald 代理地址。
+
+subject 配额至少应覆盖开始和成功确认两次请求，并留出其他操作及错误尝试的
+空间。若 `RATE_LIMIT_PER_SUBJECT=1`，开始注册便耗尽共享预算，确认需等待
+小时窗口重置，pending 记录可能更早过期。本修复将确认纳入已有共享预算，
+不另设独立配额；请按完整注册流程配置限额。

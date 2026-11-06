@@ -8,17 +8,19 @@ import (
 )
 
 func rateLimitExceeded(c fiber.Ctx, st *store.Store, subject string) (bool, error) {
-	subjectCount, err := st.IncrRateSubject(c.Context(), subject)
-	if err != nil {
-		return false, err
+	limited, err := subjectRateLimitExceeded(c, st, subject)
+	if err != nil || limited {
+		return limited, err
 	}
-	if subjectCount > int64(config.RateLimitPerSubject) {
-		return true, nil
-	}
+	return ipRateLimitExceeded(c, st)
+}
 
-	ipCount, err := st.IncrRateIP(c.Context(), c.IP())
-	if err != nil {
-		return false, err
-	}
-	return ipCount > int64(config.RateLimitPerIP), nil
+func subjectRateLimitExceeded(c fiber.Ctx, st *store.Store, subject string) (bool, error) {
+	count, err := st.IncrRateSubject(c.Context(), subject)
+	return count > int64(config.RateLimitPerSubject), err
+}
+
+func ipRateLimitExceeded(c fiber.Ctx, st *store.Store) (bool, error) {
+	count, err := st.IncrRateIP(c.Context(), c.IP())
+	return count > int64(config.RateLimitPerIP), err
 }

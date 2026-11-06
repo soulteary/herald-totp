@@ -7,6 +7,15 @@ The project follows [Semantic Versioning](https://semver.org/). Dates use the
 
 ## [Unreleased]
 
+### Fixed
+
+- Apply the existing shared subject and peer-IP quotas to enrollment confirmation
+  before secret decryption or code validation. Unknown enrollment IDs consume
+  the IP budget; subjects are taken only from stored enrollment records. Quota
+  errors fail closed without changing enrollments or credentials. Operators must
+  allow enough shared budget for both enrollment start and confirmation.
+
+
 ## [2.0.0] - 2026-11-07
 
 ### Breaking changes
