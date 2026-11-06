@@ -3,16 +3,17 @@ package router
 import (
 	"bytes"
 	"context"
-	"crypto/hmac"
-	"crypto/sha256"
 	"crypto/tls"
-	"encoding/hex"
 	"encoding/pem"
+	"fmt"
+	"github.com/soulteary/herald-totp/pkg/heraldtotp"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -192,23 +193,21 @@ func postRevoke(t *testing.T, app *fiber.App, headers map[string]string) int {
 	return resp.StatusCode
 }
 
-// signHMAC reproduces middleware-kit's default signature encoding,
-// "timestamp:service:body" -- the same bytes pkg/heraldtotp's client signs.
-func signHMAC(timestamp, service, body, secret string) string {
-	mac := hmac.New(sha256.New, []byte(secret))
-	mac.Write([]byte(timestamp + ":" + service + ":" + body))
-	return hex.EncodeToString(mac.Sum(nil))
-}
+// signHMAC builds v2 headers for a specific route and unique nonce.
+var authNonce atomic.Uint64
 
-func hmacHeaders(timestamp, service, signature string) map[string]string {
-	h := map[string]string{
-		"X-Timestamp": timestamp,
-		"X-Signature": signature,
+func signHMAC(timestamp, service, body, secret string) string {
+	nonce := fmt.Sprintf("%032x", authNonce.Add(1))
+	signature := heraldtotp.SignV2(secret, heraldtotp.RequestSignature{Method: "POST", Path: "/v1/revoke", Timestamp: timestamp, Service: service, Nonce: nonce, Body: []byte(body)})
+	return nonce + ":" + signature
+}
+func hmacHeaders(timestamp, service, encoded string) map[string]string {
+	nonce, signature, found := strings.Cut(encoded, ":")
+	if !found {
+		signature = encoded
+		nonce = strings.Repeat("0", 32)
 	}
-	if service != "" {
-		h["X-Service"] = service
-	}
-	return h
+	return map[string]string{"X-Signature-Version": "v2", "X-Nonce": nonce, "X-Timestamp": timestamp, "X-Service": service, "X-Signature": signature}
 }
 
 func TestSetup_AuthHMAC(t *testing.T) {
@@ -223,7 +222,7 @@ func TestSetup_AuthHMAC(t *testing.T) {
 	}{
 		{
 			name:    "valid signature",
-			headers: hmacHeaders(now, "", signHMAC(now, "", authTestBody, secret)),
+			headers: hmacHeaders(now, "herald", signHMAC(now, "herald", authTestBody, secret)),
 			want:    http.StatusBadRequest,
 		},
 		{
@@ -339,13 +338,13 @@ func TestSetup_AuthSchemeFallthrough(t *testing.T) {
 		},
 		{
 			name:    "hmac only",
-			headers: hmacHeaders(now, "", signHMAC(now, "", authTestBody, secret)),
+			headers: hmacHeaders(now, "herald", signHMAC(now, "herald", authTestBody, secret)),
 			want:    http.StatusBadRequest,
 		},
 		{
-			name:    "bad hmac but good api key",
+			name:    "bad hmac cannot fall back to a good api key",
 			headers: map[string]string{"X-API-Key": apiKey, "X-Timestamp": now, "X-Signature": "deadbeef"},
-			want:    http.StatusBadRequest,
+			want:    http.StatusUnauthorized,
 		},
 		{
 			name:    "both bad",

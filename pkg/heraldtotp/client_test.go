@@ -126,9 +126,8 @@ func TestClient_ResponseEdgeCases(t *testing.T) {
 }
 
 func TestComputeHMAC_WithBody(t *testing.T) {
-	client := &Client{hmacSecret: "secret"}
-	withoutBody := client.computeHMAC("1", "service", nil)
-	withBody := client.computeHMAC("1", "service", []byte(`{"ok":true}`))
+	withoutBody := SignV2("secret", RequestSignature{Timestamp: "1", Service: "service"})
+	withBody := SignV2("secret", RequestSignature{Timestamp: "1", Service: "service", Body: []byte(`{"ok":true}`)})
 	if withoutBody == withBody || len(withBody) != sha256HexLength {
 		t.Fatalf("unexpected HMAC values: without=%q with=%q", withoutBody, withBody)
 	}

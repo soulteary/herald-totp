@@ -3,15 +3,11 @@ package heraldtotp
 import (
 	"bytes"
 	"context"
-	"crypto/hmac"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
-	"strconv"
 	"time"
 )
 
@@ -82,7 +78,7 @@ func NewClient(opts *Options) (*Client, error) {
 		return nil, fmt.Errorf("base URL is required")
 	}
 	return &Client{
-		httpClient: &http.Client{Timeout: opts.Timeout},
+		httpClient: &http.Client{Timeout: opts.Timeout, CheckRedirect: func(*http.Request, []*http.Request) error { return fmt.Errorf("TOTP redirects are disabled") }},
 		baseURL:    opts.BaseURL,
 		apiKey:     opts.APIKey,
 		hmacSecret: opts.HMACSecret,
@@ -104,7 +100,9 @@ func (c *Client) Status(ctx context.Context, subject string) (*StatusResponse, e
 	if err != nil {
 		return nil, err
 	}
-	c.addAuthHeaders(req, nil)
+	if err := c.addAuthHeaders(req, nil); err != nil {
+		return nil, err
+	}
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, err
@@ -184,7 +182,9 @@ func (c *Client) EnrollStart(ctx context.Context, req *EnrollStartRequest) (*Enr
 		return nil, err
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
-	c.addAuthHeaders(httpReq, body)
+	if err := c.addAuthHeaders(httpReq, body); err != nil {
+		return nil, err
+	}
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
 		return nil, err
@@ -226,7 +226,9 @@ func (c *Client) EnrollConfirm(ctx context.Context, req *EnrollConfirmRequest) (
 		return nil, err
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
-	c.addAuthHeaders(httpReq, body)
+	if err := c.addAuthHeaders(httpReq, body); err != nil {
+		return nil, err
+	}
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
 		return nil, err
@@ -266,7 +268,9 @@ func (c *Client) Revoke(ctx context.Context, subject string) (*RevokeResponse, e
 		return nil, err
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
-	c.addAuthHeaders(httpReq, body)
+	if err := c.addAuthHeaders(httpReq, body); err != nil {
+		return nil, err
+	}
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
 		return nil, err
@@ -299,7 +303,9 @@ func (c *Client) Verify(ctx context.Context, req *VerifyRequest) (*VerifyRespons
 		return nil, err
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
-	c.addAuthHeaders(httpReq, body)
+	if err := c.addAuthHeaders(httpReq, body); err != nil {
+		return nil, err
+	}
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
 		return nil, err
@@ -326,29 +332,12 @@ func (c *Client) Verify(ctx context.Context, req *VerifyRequest) (*VerifyRespons
 	return &out, nil
 }
 
-func (c *Client) addAuthHeaders(req *http.Request, body []byte) {
-	if c.apiKey != "" {
+func (c *Client) addAuthHeaders(req *http.Request, body []byte) error {
+	if c.apiKey != "" && c.hmacSecret == "" {
 		req.Header.Set("X-API-Key", c.apiKey)
 	}
 	if c.hmacSecret != "" {
-		timestamp := strconv.FormatInt(time.Now().Unix(), 10)
-		signature := c.computeHMAC(timestamp, c.service, body)
-		req.Header.Set("X-Timestamp", timestamp)
-		req.Header.Set("X-Service", c.service)
-		req.Header.Set("X-Signature", signature)
-		if c.hmacKeyID != "" {
-			req.Header.Set("X-Key-Id", c.hmacKeyID)
-		}
+		return SignRequest(req, body, c.hmacSecret, c.service, c.hmacKeyID)
 	}
-}
-
-func (c *Client) computeHMAC(timestamp, service string, body []byte) string {
-	var b []byte
-	if body != nil {
-		b = body
-	}
-	message := fmt.Sprintf("%s:%s:%s", timestamp, service, string(b))
-	mac := hmac.New(sha256.New, []byte(c.hmacSecret))
-	mac.Write([]byte(message))
-	return hex.EncodeToString(mac.Sum(nil))
+	return nil
 }
