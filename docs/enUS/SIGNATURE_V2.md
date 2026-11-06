@@ -1,5 +1,8 @@
 # Operation-bound request authentication
 
+The v2.0.0 service and SDK root module is `github.com/soulteary/herald-totp/v2`.
+See [the v2 migration guide](MIGRATION_V2.md) for module imports, rollout and rollback.
+
 HMAC clients and the TOTP service must use the v2 wire protocol together. Legacy
 `timestamp:service:body` signatures are rejected. API-key-only clients continue
 to work. An invalid or incomplete HMAC request never falls back to an API key.

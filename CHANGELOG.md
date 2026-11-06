@@ -7,6 +7,51 @@ The project follows [Semantic Versioning](https://semver.org/). Dates use the
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-11-07
+
+### Breaking changes
+
+- Move the service and SDK root module to `github.com/soulteary/herald-totp/v2`.
+  The SDK import is `github.com/soulteary/herald-totp/v2/pkg/heraldtotp`.
+  HTTP routes remain `/v1`; the module major and HMAC wire version do not rename
+  HTTP endpoints.
+- Require operation-bound HMAC v2 signatures and one-use nonces. Authenticate the
+  method, escaped path, raw query, key ID, timestamp, service, nonce, and body hash.
+  Legacy `timestamp:service:body` signatures are rejected without a fallback switch.
+- Reject incomplete or invalid HMAC attempts even when a valid API key is also
+  supplied. When both credentials are configured, the SDK sends HMAC only.
+- Require JSON on POST routes before authentication or nonce consumption.
+- Reject authenticated SDK redirects instead of forwarding credentials or bodies.
+- Limit service names to 1–128 bytes and explicit key IDs to at most 128 bytes.
+  Startup rejects oversized mapped IDs; SDK signing rejects invalid identifiers
+  before reading randomness, changing headers, or sending a request.
+
+### Security
+
+- Atomically consume request-authentication nonces in Redis. Timestamp tolerance
+  is 60 seconds; replay records live for 150 seconds and bind the actual secret,
+  service, and nonce, including aliases of the same key. Backend failures return
+  503 rather than bypassing authentication.
+- Preserve single-key omitted-ID selection; multiple mapped keys require an
+  explicit key ID. API-key-only authentication and TLS verification remain supported.
+
+### Migration
+
+- Pause HMAC callers and drain pending operations. Deploy the v2 service and
+  upgrade every HMAC caller, including Herald, before resuming traffic. A v1 SDK
+  using legacy signatures cannot authenticate to the v2 service.
+- Run `go get github.com/soulteary/herald-totp/v2@v2.0.0` and update Go imports.
+  Pin the service container to `ghcr.io/soulteary/herald-totp:v2.0.0`.
+- API-key-only callers can migrate independently, but must use JSON POSTs and the
+  final service URL; redirects are rejected. Review identifier byte lengths.
+- Preserve the Redis dataset and encryption key. This release does not convert
+  credential records or change TOTP secrets, backup-code formats, or configured
+  factors. Prior enrollment-index upgrade restrictions still apply.
+- Do not roll back HMAC servers or callers independently. A coordinated rollback
+  restores the old signature/replay weaknesses. Preserve Redis and the encryption
+  key; see [the migration guide](docs/enUS/MIGRATION_V2.md).
+
+
 ## [1.2.8] - 2026-11-02
 
 ### Fixed
@@ -152,7 +197,8 @@ Existing credential and backup-code records keep their Redis key and JSON
 formats. Backup codes issued before v1.0.0 remain valid until consumed or the
 credential is revoked; only newly generated codes use the longer format.
 
-[Unreleased]: https://github.com/soulteary/herald-totp/compare/v1.2.8...HEAD
+[Unreleased]: https://github.com/soulteary/herald-totp/compare/v2.0.0...HEAD
+[2.0.0]: https://github.com/soulteary/herald-totp/compare/v1.2.8...v2.0.0
 [1.2.8]: https://github.com/soulteary/herald-totp/compare/v1.2.7...v1.2.8
 [1.2.7]: https://github.com/soulteary/herald-totp/compare/v1.2.6...v1.2.7
 [1.2.6]: https://github.com/soulteary/herald-totp/compare/v1.2.5...v1.2.6

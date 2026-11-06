@@ -2,8 +2,8 @@ package requestauth
 
 import (
 	"encoding/json"
-	"github.com/soulteary/herald-totp/internal/config"
-	"github.com/soulteary/herald-totp/pkg/heraldtotp"
+	"github.com/soulteary/herald-totp/v2/internal/config"
+	"github.com/soulteary/herald-totp/v2/pkg/heraldtotp"
 	"strings"
 	"testing"
 )

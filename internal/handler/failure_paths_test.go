@@ -15,9 +15,9 @@ import (
 	"github.com/alicebob/miniredis/v2/server"
 	"github.com/gofiber/fiber/v3"
 	pqtotp "github.com/pquerna/otp/totp"
-	"github.com/soulteary/herald-totp/internal/config"
-	"github.com/soulteary/herald-totp/internal/secret"
-	"github.com/soulteary/herald-totp/internal/store"
+	"github.com/soulteary/herald-totp/v2/internal/config"
+	"github.com/soulteary/herald-totp/v2/internal/secret"
+	"github.com/soulteary/herald-totp/v2/internal/store"
 )
 
 func TestEnrollmentConflictsAndCommitFailures(t *testing.T) {

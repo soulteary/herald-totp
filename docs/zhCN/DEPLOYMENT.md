@@ -1,5 +1,8 @@
 # herald-totp 部署说明
 
+v2.0.0 的模块与 HMAC 不兼容变更请按 [v2 迁移指南](MIGRATION_V2.md) 操作。下文 v1.2.8 关闭行为说明仅描述当时版本的变更。
+
+
 ## 要求
 
 - Go 1.27.3+
@@ -64,7 +67,7 @@ go run .
 并向 GHCR 发布多架构容器镜像：
 
 ```bash
-docker pull ghcr.io/soulteary/herald-totp:v1.2.8
+docker pull ghcr.io/soulteary/herald-totp:v2.0.0
 ```
 
 部署时应使用完整版本标签以保证结果可复现。发布流程也会生成不带前导 `v`

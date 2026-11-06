@@ -1,5 +1,7 @@
 # herald-totp Troubleshooting Guide
 
+For the v2.0.0 module and HMAC protocol migration, use the [v2 guide](MIGRATION_V2.md). Historical v1.2.8 shutdown notes below do not describe the v2 upgrade.
+
 This guide helps you diagnose and resolve common issues with herald-totp.
 
 ## Table of Contents

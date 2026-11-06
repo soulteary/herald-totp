@@ -16,10 +16,10 @@ import (
 	"github.com/redis/go-redis/v9"
 	logger "github.com/soulteary/logger-kit/v3"
 
-	"github.com/soulteary/herald-totp/internal/config"
-	"github.com/soulteary/herald-totp/internal/secret"
-	"github.com/soulteary/herald-totp/internal/store"
-	"github.com/soulteary/herald-totp/internal/totp"
+	"github.com/soulteary/herald-totp/v2/internal/config"
+	"github.com/soulteary/herald-totp/v2/internal/secret"
+	"github.com/soulteary/herald-totp/v2/internal/store"
+	"github.com/soulteary/herald-totp/v2/internal/totp"
 )
 
 const testEncryptionKey = "0123456789abcdef0123456789abcdef" // 32 bytes

@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/soulteary/cli-kit/env"
-	"github.com/soulteary/herald-totp/pkg/heraldtotp"
+	"github.com/soulteary/herald-totp/v2/pkg/heraldtotp"
 	logger "github.com/soulteary/logger-kit/v3"
 )
 

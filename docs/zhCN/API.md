@@ -22,7 +22,7 @@ http://localhost:8084
 ## Go 客户端
 
 受支持的 Go 客户端位于
-`github.com/soulteary/herald-totp/pkg/heraldtotp`：
+`github.com/soulteary/herald-totp/v2/pkg/heraldtotp`：
 
 ```go
 opts := heraldtotp.DefaultOptions().

@@ -6,7 +6,7 @@ import (
 	"crypto/tls"
 	"encoding/pem"
 	"fmt"
-	"github.com/soulteary/herald-totp/pkg/heraldtotp"
+	"github.com/soulteary/herald-totp/v2/pkg/heraldtotp"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -21,7 +21,7 @@ import (
 	"github.com/gofiber/fiber/v3"
 	logger "github.com/soulteary/logger-kit/v3"
 
-	"github.com/soulteary/herald-totp/internal/config"
+	"github.com/soulteary/herald-totp/v2/internal/config"
 )
 
 func TestSetup(t *testing.T) {

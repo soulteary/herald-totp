@@ -7,7 +7,7 @@ import (
 	"errors"
 	"flag"
 	"github.com/alicebob/miniredis/v2"
-	"github.com/soulteary/herald-totp/internal/config"
+	"github.com/soulteary/herald-totp/v2/internal/config"
 	"io"
 	"net"
 	"net/http"

@@ -97,8 +97,6 @@ github.com/soulteary/logger-kit/v3 v3.0.4 h1:agdskl+YQjWVfBdVUd7EAbm14+FP9QegaD4
 github.com/soulteary/logger-kit/v3 v3.0.4/go.mod h1:4Irzc/ps7qmB4pXolVbDgF1cVyOFjcHGqIAJDDOUUk0=
 github.com/soulteary/metrics-kit/v3 v3.0.4 h1:1OfCwe35MLfaMCEoJnpK+e2+IuarMIBXFTfoCNn854M=
 github.com/soulteary/metrics-kit/v3 v3.0.4/go.mod h1:rg25C34LrdtkiyAZlwXx6RL5R1M07h6EaDJnbBxn0Mg=
-github.com/soulteary/middleware-kit/v3 v3.0.4 h1:nRcJou5H6TByVjElD62qQnC25aecdjSYQTfbpnSTVCM=
-github.com/soulteary/middleware-kit/v3 v3.0.4/go.mod h1:SV+fsoxTftnjGRuEAKdXg/KqzT8zn4qbDT0OPbyyfGw=
 github.com/soulteary/redis-kit v1.8.1 h1:9BCtZNqH3N4CO38ZNMCrvBxTlKAjOFqcLvh7gK5UHHo=
 github.com/soulteary/redis-kit v1.8.1/go.mod h1:k/lvXA9ecjKhSvNJrGlQ7K0ijp727OYfecG1Mxadv5A=
 github.com/soulteary/secure-kit/v2 v2.1.3 h1:dbSrMWLVT/wtpZQ85pzDgXP4A/xBS1lBIc0N3wItNNU=
