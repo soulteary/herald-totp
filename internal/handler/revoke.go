@@ -3,7 +3,7 @@ package handler
 import (
 	"github.com/gofiber/fiber/v3"
 
-	"github.com/soulteary/herald-totp/internal/store"
+	"github.com/soulteary/herald-totp/v2/internal/store"
 )
 
 // RevokeRequest is the request body for POST /v1/revoke.

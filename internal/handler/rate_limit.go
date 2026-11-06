@@ -3,8 +3,8 @@ package handler
 import (
 	"github.com/gofiber/fiber/v3"
 
-	"github.com/soulteary/herald-totp/internal/config"
-	"github.com/soulteary/herald-totp/internal/store"
+	"github.com/soulteary/herald-totp/v2/internal/config"
+	"github.com/soulteary/herald-totp/v2/internal/store"
 )
 
 func rateLimitExceeded(c fiber.Ctx, st *store.Store, subject string) (bool, error) {

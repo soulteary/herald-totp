@@ -1,9 +1,9 @@
 package handler
 
 import (
-	"github.com/soulteary/herald-totp/internal/config"
-	"github.com/soulteary/herald-totp/internal/store"
-	"github.com/soulteary/herald-totp/internal/totp"
+	"github.com/soulteary/herald-totp/v2/internal/config"
+	"github.com/soulteary/herald-totp/v2/internal/store"
+	"github.com/soulteary/herald-totp/v2/internal/totp"
 )
 
 // totpConfigFromConfig returns TOTP config from global config (for enroll start/confirm).

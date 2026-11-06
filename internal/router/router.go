@@ -15,12 +15,12 @@ import (
 	rediskit "github.com/soulteary/redis-kit/client"
 
 	"context"
-	"github.com/soulteary/herald-totp/internal/config"
-	"github.com/soulteary/herald-totp/internal/handler"
-	"github.com/soulteary/herald-totp/internal/metrics"
-	"github.com/soulteary/herald-totp/internal/redistls"
-	"github.com/soulteary/herald-totp/internal/requestauth"
-	"github.com/soulteary/herald-totp/internal/store"
+	"github.com/soulteary/herald-totp/v2/internal/config"
+	"github.com/soulteary/herald-totp/v2/internal/handler"
+	"github.com/soulteary/herald-totp/v2/internal/metrics"
+	"github.com/soulteary/herald-totp/v2/internal/redistls"
+	"github.com/soulteary/herald-totp/v2/internal/requestauth"
+	"github.com/soulteary/herald-totp/v2/internal/store"
 )
 
 // Setup creates the Fiber app and mounts routes. Call config.Initialize(log)

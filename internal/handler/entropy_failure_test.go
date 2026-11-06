@@ -14,9 +14,9 @@ import (
 
 	"github.com/gofiber/fiber/v3"
 	pqtotp "github.com/pquerna/otp/totp"
-	"github.com/soulteary/herald-totp/internal/config"
-	"github.com/soulteary/herald-totp/internal/secret"
-	"github.com/soulteary/herald-totp/internal/store"
+	"github.com/soulteary/herald-totp/v2/internal/config"
+	"github.com/soulteary/herald-totp/v2/internal/secret"
+	"github.com/soulteary/herald-totp/v2/internal/store"
 	secure "github.com/soulteary/secure-kit/v2"
 )
 

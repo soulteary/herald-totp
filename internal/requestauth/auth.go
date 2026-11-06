@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v3"
-	"github.com/soulteary/herald-totp/pkg/heraldtotp"
+	"github.com/soulteary/herald-totp/v2/pkg/heraldtotp"
 )
 
 const maxDrift = 60 * time.Second

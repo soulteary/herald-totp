@@ -1,5 +1,8 @@
 # herald-totp Deployment
 
+For the v2.0.0 module and HMAC breaking changes, follow the [v2 migration guide](MIGRATION_V2.md). The v1.2.8 shutdown notes below describe that historical update only.
+
+
 ## Requirements
 
 - Go 1.27.3+
@@ -70,7 +73,7 @@ Each release publishes Linux, macOS, and Windows binaries plus
 `checksums.txt`. Multi-architecture container images are published to GHCR:
 
 ```bash
-docker pull ghcr.io/soulteary/herald-totp:v1.2.8
+docker pull ghcr.io/soulteary/herald-totp:v2.0.0
 ```
 
 Use the full version tag for reproducible deployments. The release workflow

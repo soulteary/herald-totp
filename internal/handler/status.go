@@ -3,7 +3,7 @@ package handler
 import (
 	"github.com/gofiber/fiber/v3"
 
-	"github.com/soulteary/herald-totp/internal/store"
+	"github.com/soulteary/herald-totp/v2/internal/store"
 )
 
 // StatusResponse is the response for GET /v1/status.

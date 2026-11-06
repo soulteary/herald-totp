@@ -9,11 +9,11 @@ import (
 	logger "github.com/soulteary/logger-kit/v3"
 	secure "github.com/soulteary/secure-kit/v2"
 
-	"github.com/soulteary/herald-totp/internal/config"
-	"github.com/soulteary/herald-totp/internal/metrics"
-	"github.com/soulteary/herald-totp/internal/secret"
-	"github.com/soulteary/herald-totp/internal/store"
-	"github.com/soulteary/herald-totp/internal/totp"
+	"github.com/soulteary/herald-totp/v2/internal/config"
+	"github.com/soulteary/herald-totp/v2/internal/metrics"
+	"github.com/soulteary/herald-totp/v2/internal/secret"
+	"github.com/soulteary/herald-totp/v2/internal/store"
+	"github.com/soulteary/herald-totp/v2/internal/totp"
 )
 
 // EnrollStartRequest is the request body for POST /v1/enroll/start.

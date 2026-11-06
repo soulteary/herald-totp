@@ -11,8 +11,8 @@ import (
 	"github.com/gofiber/fiber/v3"
 	"github.com/pterm/pterm"
 	"github.com/pterm/pterm/putils"
-	"github.com/soulteary/herald-totp/internal/config"
-	"github.com/soulteary/herald-totp/internal/router"
+	"github.com/soulteary/herald-totp/v2/internal/config"
+	"github.com/soulteary/herald-totp/v2/internal/router"
 	"github.com/soulteary/logger-kit/v3"
 	version "github.com/soulteary/version-kit/v4"
 )

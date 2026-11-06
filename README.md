@@ -3,13 +3,22 @@
 [![Go Test Coverage](./.github/coverage.svg)](./.github/go-test-report.md) [![Go Report Card](./.github/goreportcard.svg)](./.github/goreportcard-report.md) [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE) [![Go Version](https://img.shields.io/badge/go-1.27.3+-blue.svg)](https://golang.org)
 
 
+
+## v2.0.0 upgrade
+
+The service and SDK use the root module `github.com/soulteary/herald-totp/v2`.
+Update SDK imports to `github.com/soulteary/herald-totp/v2/pkg/heraldtotp` and
+coordinate HMAC callers with the service. Legacy signatures are rejected.
+See [the migration guide](docs/enUS/MIGRATION_V2.md) before upgrading or rolling back.
+
+
 ## Multi-language Documentation
 
 - [English](README.md) | [中文](README.zhCN.md)
 
 TOTP 2FA service for the Herald/Stargate stack: **enroll** (bind), **verify**, and optional **backup codes**. It does not send codes; users generate TOTP in an authenticator app (e.g. Google Authenticator). Stargate calls herald-totp for per-user TOTP instead of a single global secret.
 
-The HTTP server currently uses Fiber v3 and compatible kit packages (exact module versions are recorded in `go.mod`). Building from source requires Go 1.27.3 or later; `go.mod` is the authoritative source for exact dependency versions.
+The HTTP server currently uses Fiber v3 and kit packages (exact module versions are recorded in `go.mod`). Building from source requires Go 1.27.3 or later; `go.mod` is the authoritative source for exact dependency versions.
 
 ## Core Features
 
@@ -116,13 +125,13 @@ docker run -d --name herald-totp --network herald-totp -p 8084:8084 --stop-timeo
 Optional: add `-e API_KEY=your_shared_secret` and set `HERALD_TOTP_API_KEY` to the same value on Stargate.
 
 Released images are also available from GHCR. Use an immutable version tag for
-deployments, for example `ghcr.io/soulteary/herald-totp:v1.2.8`.
+deployments, for example `ghcr.io/soulteary/herald-totp:v2.0.0`.
 
 ## Documentation
 
 - **[Documentation Index (English)](docs/enUS/README.md)** – [API](docs/enUS/API.md) | [Deployment](docs/enUS/DEPLOYMENT.md) | [Troubleshooting](docs/enUS/TROUBLESHOOTING.md) | [Security](docs/enUS/SECURITY.md)
 - **[文档索引（中文）](docs/zhCN/README.md)** – [API](docs/zhCN/API.md) | [部署](docs/zhCN/DEPLOYMENT.md) | [故障排查](docs/zhCN/TROUBLESHOOTING.md) | [安全](docs/zhCN/SECURITY.md)
-- **[Changelog and v1.0.0 upgrade notes](CHANGELOG.md)**
+- **[Changelog and v2.0.0 upgrade notes](CHANGELOG.md)**
 
 ## Testing
 

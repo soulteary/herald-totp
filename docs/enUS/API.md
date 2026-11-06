@@ -20,7 +20,7 @@ If neither is set, no authentication is required (dev only).
 ## Go client
 
 The supported Go client is available at
-`github.com/soulteary/herald-totp/pkg/heraldtotp`:
+`github.com/soulteary/herald-totp/v2/pkg/heraldtotp`:
 
 ```go
 opts := heraldtotp.DefaultOptions().
