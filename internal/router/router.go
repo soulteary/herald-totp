@@ -12,14 +12,14 @@ import (
 	logger "github.com/soulteary/logger-kit/v3"
 	loggerfiber "github.com/soulteary/logger-kit/v3/fiberadapter"
 	metricsfiber "github.com/soulteary/metrics-kit/v3/fiberadapter"
-	middlewarekit "github.com/soulteary/middleware-kit/v3"
-	mwfiber "github.com/soulteary/middleware-kit/v3/fiberadapter"
 	rediskit "github.com/soulteary/redis-kit/client"
 
+	"context"
 	"github.com/soulteary/herald-totp/internal/config"
 	"github.com/soulteary/herald-totp/internal/handler"
 	"github.com/soulteary/herald-totp/internal/metrics"
 	"github.com/soulteary/herald-totp/internal/redistls"
+	"github.com/soulteary/herald-totp/internal/requestauth"
 	"github.com/soulteary/herald-totp/internal/store"
 )
 
@@ -64,7 +64,7 @@ func Setup(app *fiber.App, log *logger.Logger) (*store.Store, error) {
 	app.Use(cors.New(cors.Config{
 		AllowOrigins: []string{"*"},
 		AllowMethods: []string{"GET", "POST", "OPTIONS"},
-		AllowHeaders: []string{"Content-Type", "Authorization", "X-Service", "X-Signature", "X-Timestamp", "X-API-Key", "X-Key-Id"},
+		AllowHeaders: []string{"Content-Type", "Authorization", "X-Service", "X-Signature", "X-Signature-Version", "X-Timestamp", "X-Nonce", "X-API-Key", "X-Key-Id"},
 	}))
 
 	healthConfig := health.DefaultConfig().WithServiceName(config.ServiceName)
@@ -74,18 +74,11 @@ func Setup(app *fiber.App, log *logger.Logger) (*store.Store, error) {
 
 	app.Get("/metrics", metricsfiber.HandlerFor(metrics.Registry))
 
-	v1 := app.Group("/v1")
-	zerologLogger := log.Zerolog()
-	authHandler := mwfiber.CombinedAuth(mwfiber.AuthConfig{
-		AuthConfig: middlewarekit.AuthConfig{
-			HMACConfig: &middlewarekit.HMACConfig{
-				KeyProvider: config.GetHMACSecret,
-			},
-			APIKeyConfig: &middlewarekit.APIKeyConfig{
-				APIKey: config.APIKey,
-			},
-			AllowNoAuth: config.AllowNoAuth(),
-			Logger:      &zerologLogger,
+	v1 := app.Group("/v1", requireJSON)
+	authHandler := requestauth.New(requestauth.Config{
+		KeyProvider: config.GetHMACSecret, APIKey: config.APIKey,
+		Consume: func(ctx context.Context, key string, ttl time.Duration) (bool, error) {
+			return redisClient.SetNX(ctx, key, "1", ttl).Result()
 		},
 	})
 

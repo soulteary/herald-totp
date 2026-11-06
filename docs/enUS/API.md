@@ -13,7 +13,7 @@ http://localhost:8084
 When `API_KEY` or `HMAC_SECRET` / `HERALD_TOTP_HMAC_KEYS` is set, callers (e.g. Herald, which proxies for Stargate) must authenticate:
 
 - **API Key**: send `X-API-Key` header with the same value.
-- **HMAC**: send `X-Timestamp`, `X-Service`, and `X-Signature`. The timestamp is Unix seconds, the body is the exact request-body byte sequence (empty for requests without a body), and the signature is the lowercase hexadecimal encoding of `HMAC-SHA256(secret, timestamp + ":" + service + ":" + body)`. Send `X-Key-Id` whenever `HERALD_TOTP_HMAC_KEYS` contains multiple keys; it may be omitted for a single mapped key.
+- **HMAC v2**: use `heraldtotp.SignRequest` and the operation-bound [v2 protocol](SIGNATURE_V2.md). The method, escaped path, query, key ID, timestamp, service, nonce and body hash are authenticated. Legacy body-only signatures are rejected.
 
 If neither is set, no authentication is required (dev only).
 

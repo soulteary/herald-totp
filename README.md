@@ -149,3 +149,10 @@ Lint: `golangci-lint run`.
 ## License
 
 See [LICENSE](LICENSE) for details.
+
+## HMAC protocol migration
+
+HMAC clients now require operation-bound v2 signatures and one-use nonces. Legacy
+signatures are rejected. Upgrade the service and its callers together before
+resuming traffic; see [the v2 protocol and deployment order](docs/enUS/SIGNATURE_V2.md).
+Authenticated SDK requests reject redirects, and POST routes require JSON.

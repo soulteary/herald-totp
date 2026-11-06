@@ -41,3 +41,10 @@ This document describes security considerations and recommendations for herald-t
 - Use **API_KEY** or HMAC in production for service-to-service auth; configure Stargate to match.
 - Prefer private network and HTTPS in front of herald-totp; do not expose it publicly without protection.
 - Protect Redis with auth and TLS where possible.
+
+## Bound signatures
+
+Use the [v2 request protocol](SIGNATURE_V2.md). Every HMAC operation requires a
+fresh nonce and a signature bound to its exact target. Replay-store failures
+reject the request. Requests with invalid HMAC never fall back to a supplied
+API key. POST routes accept JSON only. Upgrade the service and clients together.

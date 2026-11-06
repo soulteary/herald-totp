@@ -1,3 +1,5 @@
+> HMAC protocol update: legacy signatures are rejected. Use operation-bound v2 signatures with a one-use nonce. Upgrade the service and clients together; see [the protocol and migration guide](../enUS/SIGNATURE_V2.md). POST requests require JSON.
+
 # herald-totp API 文档
 
 herald-totp 是 TOTP 双因素认证服务：**绑定（enroll）**、**验证（verify）**、以及可选的**恢复码（backup codes）**。不实现“发送”通道；由 Stargate（或登录服务）调用，提供按用户的 TOTP。
