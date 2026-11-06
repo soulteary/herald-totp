@@ -156,3 +156,9 @@ HMAC clients now require operation-bound v2 signatures and one-use nonces. Legac
 signatures are rejected. Upgrade the service and its callers together before
 resuming traffic; see [the v2 protocol and deployment order](docs/enUS/SIGNATURE_V2.md).
 Authenticated SDK requests reject redirects, and POST routes require JSON.
+
+HMAC service names must contain 1–128 bytes, and explicit key IDs must contain at
+most 128 bytes (UTF-8 byte length, not character count). Startup rejects oversized
+`HERALD_TOTP_HMAC_KEYS` key IDs; SDK signing rejects oversized identifiers before
+sending a request. Omitting the key ID remains supported when exactly one mapped
+key is configured. Multiple mapped keys require an explicit key ID.

@@ -16,6 +16,9 @@ import (
 // SignatureVersion is the operation-bound TOTP request-authentication protocol.
 const SignatureVersion = "v2"
 
+// MaxAuthIdentifierBytes bounds each service name and HMAC key ID on the wire.
+const MaxAuthIdentifierBytes = 128
+
 // RequestSignature contains the fields authenticated by a v2 request.
 type RequestSignature struct {
 	Method, Path, Query, KeyID, Timestamp, Service, Nonce string
@@ -46,6 +49,9 @@ func SignRequest(req *http.Request, body []byte, secret, service, keyID string) 
 func signRequest(req *http.Request, body []byte, secret, service, keyID string, reader io.Reader, now time.Time) error {
 	if req == nil || req.URL == nil || secret == "" || service == "" {
 		return errors.New("TOTP request signing requires a URL, service, and secret")
+	}
+	if len(service) > MaxAuthIdentifierBytes || len(keyID) > MaxAuthIdentifierBytes {
+		return errors.New("TOTP service and key ID must not exceed 128 bytes")
 	}
 	nonce := make([]byte, 16)
 	if _, err := io.ReadFull(reader, nonce); err != nil {

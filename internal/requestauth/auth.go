@@ -64,7 +64,7 @@ func deny(c fiber.Ctx) error {
 
 func verify(c fiber.Ctx, cfg Config) error {
 	version, signature, ts, service, keyID, nonce := c.Get("X-Signature-Version"), c.Get("X-Signature"), c.Get("X-Timestamp"), c.Get("X-Service"), c.Get("X-Key-Id"), c.Get("X-Nonce")
-	if version != heraldtotp.SignatureVersion || len(signature) != 64 || len(nonce) != 32 || len(service) == 0 || len(service) > 128 || len(keyID) > 128 || len(ts) > 20 || cfg.KeyProvider == nil || cfg.Consume == nil {
+	if version != heraldtotp.SignatureVersion || len(signature) != 64 || len(nonce) != 32 || len(service) == 0 || len(service) > heraldtotp.MaxAuthIdentifierBytes || len(keyID) > heraldtotp.MaxAuthIdentifierBytes || len(ts) > 20 || cfg.KeyProvider == nil || cfg.Consume == nil {
 		return deny(c)
 	}
 	if _, err := hex.DecodeString(nonce); err != nil {
