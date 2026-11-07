@@ -16,7 +16,7 @@ See [the migration guide](docs/enUS/MIGRATION_V2.md) before upgrading or rolling
 
 - [English](README.md) | [中文](README.zhCN.md)
 
-TOTP 2FA service for the Herald/Stargate stack: **enroll** (bind), **verify**, and optional **backup codes**. It does not send codes; users generate TOTP in an authenticator app (e.g. Google Authenticator). Stargate calls herald-totp for per-user TOTP instead of a single global secret.
+TOTP 2FA service for the Herald/Stargate stack: **enroll** (bind), **verify**, and optional **backup codes**. It does not send codes; users generate TOTP in an authenticator app (e.g. Google Authenticator). Stargate calls Herald, which proxies to herald-totp for per-user TOTP instead of a single global secret.
 
 The HTTP server currently uses Fiber v3 and kit packages (exact module versions are recorded in `go.mod`). Building from source requires Go 1.27.3 or later; `go.mod` is the authoritative source for exact dependency versions.
 
@@ -32,36 +32,43 @@ The HTTP server currently uses Fiber v3 and kit packages (exact module versions 
 
 ## Architecture
 
-Stargate orchestrates login and TOTP bind; herald-totp stores per-user TOTP secrets (encrypted) and backup codes in Redis and performs enroll/verify.
+Stargate orchestrates login and TOTP bind through Herald; herald-totp stores per-user TOTP secrets (encrypted) and backup codes in Redis and performs enroll/verify.
 
 ```mermaid
 sequenceDiagram
   participant User
   participant Stargate
+  participant Herald
   participant HeraldTotp as herald-totp
   participant Redis
 
   Note over User,Redis: Bind flow (after login)
   User->>Stargate: Open TOTP enroll page
-  Stargate->>HeraldTotp: POST /v1/enroll/start (subject)
+  Stargate->>Herald: POST /v1/totp/enroll/start (subject)
+  Herald->>HeraldTotp: POST /v1/enroll/start (subject)
   HeraldTotp->>Redis: Store temp enrollment
-  HeraldTotp-->>Stargate: enroll_id, otpauth_uri
+  HeraldTotp-->>Herald: enroll_id, otpauth_uri
+  Herald-->>Stargate: enroll_id, otpauth_uri
   Stargate-->>User: Show QR code
   User->>Stargate: Enter TOTP code
-  Stargate->>HeraldTotp: POST /v1/enroll/confirm (enroll_id, code)
+  Stargate->>Herald: POST /v1/totp/enroll/confirm (enroll_id, code)
+  Herald->>HeraldTotp: POST /v1/enroll/confirm (enroll_id, code)
   HeraldTotp->>Redis: Save credential, backup_codes
-  HeraldTotp-->>Stargate: backup_codes
+  HeraldTotp-->>Herald: backup_codes
+  Herald-->>Stargate: backup_codes
   Stargate-->>User: Bind done
 
   Note over User,Redis: Login flow (TOTP step)
   User->>Stargate: Submit TOTP or backup code
-  Stargate->>HeraldTotp: POST /v1/verify (subject, code)
+  Stargate->>Herald: POST /v1/totp/verify (subject, code)
+  Herald->>HeraldTotp: POST /v1/verify (subject, code)
   HeraldTotp->>Redis: Read credential, verify
-  HeraldTotp-->>Stargate: ok, subject, amr, issued_at
+  HeraldTotp-->>Herald: ok, subject, amr, issued_at
+  Herald-->>Stargate: ok, subject, amr, issued_at
   Stargate-->>User: Session created
 ```
 
-- **Stargate**: ForwardAuth / login and TOTP bind orchestration; calls herald-totp for enroll and verify.
+- **Stargate**: ForwardAuth / login and TOTP bind orchestration; calls Herald, which proxies enrollment and verification to herald-totp.
 - **herald-totp**: Per-user TOTP secrets (AES-GCM in Redis), enroll/confirm, verify (TOTP or backup code), revoke, status.
 - **Redis**: Credentials, enrollment temp state, backup codes, rate limits.
 
@@ -90,7 +97,8 @@ See [docs/enUS/DEPLOYMENT.md](docs/enUS/DEPLOYMENT.md) for full options.
 
 ## Stargate integration
 
-- Set `HERALD_TOTP_ENABLED=true`, `HERALD_TOTP_BASE_URL=http://herald-totp:8084`, and `HERALD_TOTP_API_KEY` or `HERALD_TOTP_HMAC_SECRET` to match herald-totp.
+- Enable `HERALD_TOTP_ENABLED=true` on Stargate and configure its Herald connection.
+- On Herald, set `HERALD_TOTP_ENABLED=true`, `HERALD_TOTP_BASE_URL=http://herald-totp:8084`, and matching `HERALD_TOTP_API_KEY` or `HERALD_TOTP_HMAC_SECRET`. The request path is Stargate → Herald → herald-totp; Herald owns the backend address and credentials.
 
 ## Quick Start
 
@@ -100,6 +108,7 @@ This is a disposable local Docker example. It generates a fresh key and does not
 
 ```bash
 export HERALD_TOTP_ENCRYPTION_KEY="$(openssl rand -base64 24)"
+export API_KEY="$(openssl rand -hex 32)"
 export REDIS_ADDR=localhost:6379
 go build -o herald-totp .
 ./herald-totp
@@ -113,16 +122,17 @@ secrets unreadable.
 
 ```bash
 export HERALD_TOTP_ENCRYPTION_KEY="$(openssl rand -base64 24)"
+export API_KEY="$(openssl rand -hex 32)"
 docker network create herald-totp
 docker run -d --name herald-totp-redis --network herald-totp redis:8-alpine
 docker build -t herald-totp .
 docker run -d --name herald-totp --network herald-totp -p 8084:8084 --stop-timeout=15 \
-  -e HERALD_TOTP_ENCRYPTION_KEY \
+  -e HERALD_TOTP_ENCRYPTION_KEY -e API_KEY \
   -e REDIS_ADDR=herald-totp-redis:6379 \
   herald-totp
 ```
 
-Optional: add `-e API_KEY=your_shared_secret` and set `HERALD_TOTP_API_KEY` to the same value on Stargate.
+Business calls require API-key or HMAC credentials. These examples generate a synthetic `API_KEY`; set `HERALD_TOTP_API_KEY` on Herald to that same value. Requests without valid credentials return 401.
 
 Released images are also available from GHCR. Use an immutable version tag for
 deployments, for example `ghcr.io/soulteary/herald-totp:v2.0.2`.

@@ -96,7 +96,7 @@ func TestSetup_RevokeRoute(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Setup: %v", err)
 	}
-	// POST /v1/revoke with empty body: 400 (subject required) when no auth, or 401 when auth required
+	// Without valid credentials, authentication rejects the request before body validation.
 	req := httptest.NewRequest("POST", "/v1/revoke", bytes.NewReader([]byte("{}")))
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := app.Test(req)
@@ -124,7 +124,7 @@ func TestSetup_StatusRoute(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Setup: %v", err)
 	}
-	// GET /v1/status without subject: 400 when no auth, or 401 when auth required
+	// Without valid credentials, authentication rejects the request before subject validation.
 	req := httptest.NewRequest("GET", "/v1/status", nil)
 	resp, err := app.Test(req)
 	if err != nil {
@@ -135,21 +135,16 @@ func TestSetup_StatusRoute(t *testing.T) {
 	}
 }
 
-// --- CombinedAuth regression coverage ---
-//
-// middleware-kit v3 reworked how CombinedAuth decides a request: mTLS is now
-// actually attempted rather than being skipped by a guard that never held.
-// This service configures no MTLSConfig, so every request below travels the
-// HMAC and API-key paths -- these tests pin that down.
+// --- Request authentication regression coverage ---
+// These tests exercise the local operation-bound HMAC and API-key middleware.
 
 // authTestBody carries no subject, so a request that authenticates reaches the
 // revoke handler and is answered 400; one that does not is answered 401. That
 // difference is what every assertion here reads.
 const authTestBody = `{}`
 
-// newAuthTestApp builds the real router against miniredis. CombinedAuth reads
-// config.APIKey and config.AllowNoAuth() at setup time, so both are installed
-// before Setup runs.
+// newAuthTestApp builds the real router against miniredis with credentials
+// installed before Setup constructs requestauth.New.
 func newAuthTestApp(t *testing.T, apiKey, hmacSecret string) *fiber.App {
 	t.Helper()
 
@@ -315,9 +310,8 @@ func TestSetup_AuthAPIKey(t *testing.T) {
 	}
 }
 
-// TestSetup_AuthSchemeFallthrough covers the ordering CombinedAuth applies
-// when more than one scheme is configured: mTLS is unconfigured, HMAC declines
-// a request carrying no signature headers, and the API key still admits it.
+// TestSetup_AuthSchemeFallthrough checks independent API-key authentication when
+// no HMAC headers are supplied. An attempted HMAC request cannot fall back.
 func TestSetup_AuthSchemeFallthrough(t *testing.T) {
 	const (
 		apiKey = "both-schemes-api-key"
@@ -367,21 +361,8 @@ func TestSetup_AuthSchemeFallthrough(t *testing.T) {
 	}
 }
 
-// TestSetup_AuthAllowNoAuth pins what the AllowNoAuth switch actually does in
-// this service.
-//
-// config.AllowNoAuth() reports true when neither an API key nor an HMAC secret
-// is configured, and Setup passes that through to CombinedAuth -- but it never
-// takes effect. CombinedAuth consults AllowNoAuth only when NO scheme is
-// configured, and Setup always hands it an HMACConfig whose KeyProvider is
-// config.GetHMACSecret: a non-nil func value, so the HMAC scheme always counts
-// as configured and an unauthenticated request is refused either way.
-//
-// middleware-kit v3 does not change this. v2 gated on the same
-// "HMACConfig != nil && (Secret != \"\" || KeyProvider != nil)" expression, and
-// this test answers 401 on both. It is pinned here so that a future change on
-// either side surfaces as a failure rather than as a service that quietly
-// begins admitting unauthenticated requests.
+// TestSetup_AuthAllowNoAuth checks the configuration helper separately from
+// the router: requestauth.New always requires valid business credentials.
 func TestSetup_AuthAllowNoAuth(t *testing.T) {
 	t.Run("config reports it enabled with no credentials configured", func(t *testing.T) {
 		oldAPIKey, oldHMAC := config.APIKey, config.HMACSecret
@@ -409,8 +390,7 @@ func TestSetup_AuthAllowNoAuth(t *testing.T) {
 	})
 
 	// The middleware refuses an unauthenticated request in all three cases:
-	// the always-present KeyProvider keeps the HMAC scheme configured, so the
-	// AllowNoAuth branch is never reached.
+	// requestauth.New has no anonymous business-route branch.
 	tests := []struct {
 		name       string
 		apiKey     string

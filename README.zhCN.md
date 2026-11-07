@@ -15,7 +15,7 @@
 
 - [English](README.md) | [中文](README.zhCN.md)
 
-herald-totp 是 Herald/Stargate 栈的 TOTP 双因素认证服务：**绑定（enroll）**、**验证（verify）**、以及可选的**恢复码（backup codes）**。不发送验证码，用户通过验证器应用（如 Google Authenticator）生成 TOTP。Stargate 按用户调用 herald-totp 进行 TOTP 校验，而非使用单一全局密钥。
+herald-totp 是 Herald/Stargate 栈的 TOTP 双因素认证服务：**绑定（enroll）**、**验证（verify）**、以及可选的**恢复码（backup codes）**。不发送验证码，用户通过验证器应用（如 Google Authenticator）生成 TOTP。Stargate 经 Herald 代理调用 herald-totp 进行按用户的 TOTP 校验，而非使用单一全局密钥。
 
 HTTP 服务当前使用 Fiber v3 及 kit 包（精确模块版本见 `go.mod`）。从源码构建需要 Go 1.27.3 或更高版本；依赖的精确版本以 `go.mod` 为准。
 
@@ -31,36 +31,43 @@ HTTP 服务当前使用 Fiber v3 及 kit 包（精确模块版本见 `go.mod`）
 
 ## 架构
 
-Stargate 负责登录与 TOTP 绑定编排；herald-totp 在 Redis 中存储每用户 TOTP 密钥（加密）与恢复码，并执行 enroll/verify。
+Stargate 经 Herald 负责登录与 TOTP 绑定编排；herald-totp 在 Redis 中存储每用户 TOTP 密钥（加密）与恢复码，并执行 enroll/verify。
 
 ```mermaid
 sequenceDiagram
   participant User as 用户
   participant Stargate
+  participant Herald
   participant HeraldTotp as herald-totp
   participant Redis
 
   Note over User,Redis: 绑定流程（登录后）
   User->>Stargate: 打开 TOTP 绑定页
-  Stargate->>HeraldTotp: POST /v1/enroll/start (subject)
+  Stargate->>Herald: POST /v1/totp/enroll/start (subject)
+  Herald->>HeraldTotp: POST /v1/enroll/start (subject)
   HeraldTotp->>Redis: 存临时绑定状态
-  HeraldTotp-->>Stargate: enroll_id, otpauth_uri
+  HeraldTotp-->>Herald: enroll_id, otpauth_uri
+  Herald-->>Stargate: enroll_id, otpauth_uri
   Stargate-->>User: 展示二维码
   User->>Stargate: 输入 TOTP 码
-  Stargate->>HeraldTotp: POST /v1/enroll/confirm (enroll_id, code)
+  Stargate->>Herald: POST /v1/totp/enroll/confirm (enroll_id, code)
+  Herald->>HeraldTotp: POST /v1/enroll/confirm (enroll_id, code)
   HeraldTotp->>Redis: 保存凭证、backup_codes
-  HeraldTotp-->>Stargate: backup_codes
+  HeraldTotp-->>Herald: backup_codes
+  Herald-->>Stargate: backup_codes
   Stargate-->>User: 绑定完成
 
   Note over User,Redis: 登录流程（TOTP 步骤）
   User->>Stargate: 提交 TOTP 或恢复码
-  Stargate->>HeraldTotp: POST /v1/verify (subject, code)
+  Stargate->>Herald: POST /v1/totp/verify (subject, code)
+  Herald->>HeraldTotp: POST /v1/verify (subject, code)
   HeraldTotp->>Redis: 读取凭证并校验
-  HeraldTotp-->>Stargate: ok, subject, amr, issued_at
+  HeraldTotp-->>Herald: ok, subject, amr, issued_at
+  Herald-->>Stargate: ok, subject, amr, issued_at
   Stargate-->>User: 创建会话
 ```
 
-- **Stargate**：ForwardAuth / 登录与 TOTP 绑定编排；调用 herald-totp 完成 enroll 与 verify。
+- **Stargate**：ForwardAuth / 登录与 TOTP 绑定编排；调用 Herald，由其代理到 herald-totp 完成 enroll 与 verify。
 - **herald-totp**：每用户 TOTP 密钥（AES-GCM 存 Redis）、enroll/confirm、verify（TOTP 或恢复码）、revoke、status。
 - **Redis**：凭证、绑定临时状态、恢复码、限流状态。
 
@@ -87,9 +94,10 @@ sequenceDiagram
 
 更多见 [docs/zhCN/DEPLOYMENT.md](docs/zhCN/DEPLOYMENT.md)。
 
-## Stargate 侧配置
+## Stargate 与 Herald 配置
 
-- 设置 `HERALD_TOTP_ENABLED=true`、`HERALD_TOTP_BASE_URL=http://herald-totp:8084`，以及 `HERALD_TOTP_API_KEY` 或 `HERALD_TOTP_HMAC_SECRET` 与 herald-totp 保持一致。
+- 在 Stargate 启用 `HERALD_TOTP_ENABLED=true`，并配置其 Herald 连接。
+- 在 Herald 配置 `HERALD_TOTP_ENABLED=true`、`HERALD_TOTP_BASE_URL=http://herald-totp:8084`，以及与后端匹配的 `HERALD_TOTP_API_KEY` 或 `HERALD_TOTP_HMAC_SECRET`。调用链为 Stargate → Herald → herald-totp；后端连接地址与凭据由 Herald 持有。
 
 ## 快速开始
 
@@ -99,6 +107,7 @@ sequenceDiagram
 
 ```bash
 export HERALD_TOTP_ENCRYPTION_KEY="$(openssl rand -base64 24)"
+export API_KEY="$(openssl rand -hex 32)"
 export REDIS_ADDR=localhost:6379
 go build -o herald-totp .
 ./herald-totp
@@ -111,16 +120,17 @@ Redis 必须能够通过 `REDIS_ADDR` 访问。创建凭证后应长期保留生
 
 ```bash
 export HERALD_TOTP_ENCRYPTION_KEY="$(openssl rand -base64 24)"
+export API_KEY="$(openssl rand -hex 32)"
 docker network create herald-totp
 docker run -d --name herald-totp-redis --network herald-totp redis:8-alpine
 docker build -t herald-totp .
 docker run -d --name herald-totp --network herald-totp -p 8084:8084 --stop-timeout=15 \
-  -e HERALD_TOTP_ENCRYPTION_KEY \
+  -e HERALD_TOTP_ENCRYPTION_KEY -e API_KEY \
   -e REDIS_ADDR=herald-totp-redis:6379 \
   herald-totp
 ```
 
-可选：添加 `-e API_KEY=your_shared_secret`，并在 Stargate 侧将 `HERALD_TOTP_API_KEY` 设为相同值。
+业务请求必须使用 API key 或 HMAC 凭据。示例生成合成 `API_KEY`，请在 Herald 将 `HERALD_TOTP_API_KEY` 配置为相同值；未提供有效凭据时返回 401。
 
 正式版本镜像同时发布到 GHCR。部署时建议使用不可变版本标签，例如
 `ghcr.io/soulteary/herald-totp:v2.0.0`。
