@@ -4,11 +4,11 @@
 
 | Metric | Value |
 | --- | --- |
-| Total | 155 |
-| Passed | 151 |
+| Total | 158 |
+| Passed | 154 |
 | Failed | 0 |
 | Skipped | 4 |
-| Coverage | 98.29% |
+| Coverage | 98.31% |
 | Threshold | 0.00% |
 
 ### Packages
@@ -17,7 +17,7 @@
 | --- | --- | --- | --- | --- |
 | . | pass | 4 | 0 | 100.00% |
 | internal/config | pass | 12 | 0 | 100.00% |
-| internal/handler | pass | 45 | 0 | 98.63% |
+| internal/handler | pass | 48 | 0 | 98.68% |
 | internal/metrics | pass | 2 | 0 | 100.00% |
 | internal/redistls | pass | 4 | 0 | 100.00% |
 | internal/requestauth | pass | 6 | 0 | 100.00% |
