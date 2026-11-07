@@ -4,7 +4,7 @@
 
 | Metric | Value |
 | ------ | ----- |
-| Files | 42 |
+| Files | 43 |
 | Issues | 9 |
 
 ## Checks
@@ -13,7 +13,7 @@
 | ----- | ----- |
 | gofmt | 100% |
 | go_vet | 100% |
-| gocyclo | 78% |
+| gocyclo | 79% |
 | ineffassign | 100% |
 | license | 100% |
 | misspell | 100% |
@@ -22,12 +22,8 @@
 
 ### gocyclo
 
-- `internal/handler/failure_paths_test.go`
-  - Line 99: cyclomatic complexity 32 for function TestVerifyAndRevokeStorageFailures
-  - Line 23: cyclomatic complexity 26 for function TestEnrollmentConflictsAndCommitFailures
-  - Line 176: cyclomatic complexity 17 for function TestBackupVerificationRejectsChallengeClaimedAfterPrecheck
-- `internal/config/config.go`
-  - Line 92: cyclomatic complexity 26 for function Validate
+- `internal/handler/confirm_rate_limit_test.go`
+  - Line 20: cyclomatic complexity 38 for function TestEnrollConfirmRateLimitsBeforeCredentialMutation
 - `main_test.go`
   - Line 143: cyclomatic complexity 24 for function TestMainBoundsShutdownWhileEnrollmentEntropyIsBlocked
 - `pkg/heraldtotp/client_test.go`
@@ -36,13 +32,17 @@
   - Line 127: cyclomatic complexity 20 for function EnrollConfirm
 - `internal/requestauth/auth.go`
   - Line 65: cyclomatic complexity 18 for function verify
-- `internal/handler/confirm_rate_limit_test.go`
-  - Line 20: cyclomatic complexity 38 for function TestEnrollConfirmRateLimitsBeforeCredentialMutation
+- `internal/handler/failure_paths_test.go`
+  - Line 99: cyclomatic complexity 32 for function TestVerifyAndRevokeStorageFailures
+  - Line 23: cyclomatic complexity 26 for function TestEnrollmentConflictsAndCommitFailures
+  - Line 176: cyclomatic complexity 17 for function TestBackupVerificationRejectsChallengeClaimedAfterPrecheck
+- `internal/config/config.go`
+  - Line 92: cyclomatic complexity 26 for function Validate
 - `internal/handler/verify.go`
   - Line 39: cyclomatic complexity 24 for function Verify
 - `internal/store/store.go`
-  - Line 298: cyclomatic complexity 19 for function (*Store).ConfirmEnrollment
-  - Line 454: cyclomatic complexity 17 for function (*Store).ConsumeBackupCodeAndClaimChallenge
+  - Line 327: cyclomatic complexity 19 for function (*Store).ConfirmEnrollment
+  - Line 483: cyclomatic complexity 17 for function (*Store).ConsumeBackupCodeAndClaimChallenge
 
 ---
 

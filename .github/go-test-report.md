@@ -4,11 +4,11 @@
 
 | Metric | Value |
 | --- | --- |
-| Total | 158 |
-| Passed | 154 |
+| Total | 163 |
+| Passed | 158 |
 | Failed | 0 |
-| Skipped | 4 |
-| Coverage | 98.31% |
+| Skipped | 5 |
+| Coverage | 98.32% |
 | Threshold | 0.00% |
 
 ### Packages
@@ -23,6 +23,6 @@
 | internal/requestauth | pass | 6 | 0 | 100.00% |
 | internal/router | pass | 10 | 0 | 100.00% |
 | internal/secret | pass | 6 | 0 | 100.00% |
-| internal/store | pass | 34 | 0 | 96.76% |
+| internal/store | pass | 39 | 0 | 96.88% |
 | internal/totp | pass | 8 | 0 | 100.00% |
 | pkg/heraldtotp | pass | 24 | 0 | 97.14% |
