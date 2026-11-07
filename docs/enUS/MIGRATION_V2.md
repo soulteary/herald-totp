@@ -68,3 +68,34 @@ versioned binaries and container tags, including `2`, `2.0`, `2.0.0`, `v2.0.0`,
 and `latest` for v2.0.0. Pin the full version in deployments; do not rely on mutable
 major or latest tags when coordinating an upgrade. This workflow does not publish
 release candidates.
+
+
+## Patch upgrade from v2.0.0 to v2.0.1
+
+v2.0.1 adds enrollment confirmation to the existing subject/hour and
+peer-IP/minute quotas. Review both limits before switching traffic. Start and
+confirmation share counters with verification and revocation; reserve at least
+two subject requests for the successful enrollment flow, plus other operations
+and failed attempts. A subject limit of one blocks confirmation after start
+until the hourly reset, and the enrollment may expire first. Requests through a
+shared Herald proxy can share the same upstream peer-IP quota.
+
+Unknown enrollment IDs count against the IP budget. Valid records use their
+stored subject, never a client-provided subject. Each confirmation counts the IP
+once and checks quotas before secret decryption or code validation. Exhaustion
+returns `429/rate_limited`. A Redis quota failure rejects the request without
+consuming the enrollment or creating a credential. Successful HTTP payloads,
+HMAC v2 and the Go `/v2` import path remain unchanged.
+
+Keep Redis, quota windows, nonce/replay state and the original encryption key
+through upgrade and rollback. No data conversion is required between these two
+patch versions. Do not flush counters or pending records to bypass a 429.
+Configure the client to retain its enrollment context for retry, while respecting
+the enrollment's existing expiry. Older proxies may mask 429 as a generic error;
+Herald v1.4.1 preserves this confirmation response as `429/rate_limited`.
+
+Rolling back to v2.0.0 removes the confirmation quota fix. The same persisted
+state remains readable, but that rollback restores the unbounded confirmation
+path. Rollback to a pre-v2 release also loses the authentication safeguards and
+must follow the major-version restrictions above; do not downgrade it as an
+independent response to a gateway failure.

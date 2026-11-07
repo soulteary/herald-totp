@@ -7,6 +7,8 @@ The project follows [Semantic Versioning](https://semver.org/). Dates use the
 
 ## [Unreleased]
 
+## [2.0.1] - 2026-11-07
+
 ### Fixed
 
 - Apply the existing shared subject and peer-IP quotas to enrollment confirmation
@@ -15,6 +17,20 @@ The project follows [Semantic Versioning](https://semver.org/). Dates use the
   errors fail closed without changing enrollments or credentials. Operators must
   allow enough shared budget for both enrollment start and confirmation.
 
+### Compatibility and operations
+
+- Keep the `/v2` Go module, HMAC v2 protocol, `/v1` HTTP routes and successful
+  enrollment response unchanged. No Redis schema or encryption-key migration.
+- Confirmation returns `429/rate_limited` when the shared budget is exhausted.
+  Reserve capacity for enrollment start, confirmation and incorrect attempts;
+  a subject limit of one blocks confirmation after start until the hourly reset,
+  and the pending enrollment may expire before then. Proxy callers share the
+  upstream peer-IP budget.
+- Preserve Redis data, active quota windows, replay state and the existing
+  encryption key through upgrade or rollback. A rollback to v2.0.0 restores the
+  missing confirmation quota; it must not clear counters or pending state to
+  bypass a rejection. Older pre-v2 deployments still require the separate v2
+  authentication and enrollment-index migration rules.
 
 ## [2.0.0] - 2026-11-07
 
