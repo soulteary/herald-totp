@@ -37,6 +37,8 @@ v2.0.0 的模块与 HMAC 不兼容变更请按 [v2 迁移指南](MIGRATION_V2.md
 
 启动时会一次性报告全部配置校验问题，并在监听端口或初始化 Redis 前退出。
 
+业务调用必须配置至少一种 API key 或 HMAC 凭据。表中各项可选是指可以选择另一种方案；两类都不配置并不会开放匿名访问。下方启动示例还须从密钥管理服务加载所选凭据。
+
 ## 运行
 
 加密密钥只生成**一次**，保存到 Secret Manager，并在每次启动时复用同一个值：
@@ -48,6 +50,7 @@ v2.0.0 的模块与 HMAC 不兼容变更请按 [v2 迁移指南](MIGRATION_V2.md
 
 # 每次启动均读取已经保存的值。
 export HERALD_TOTP_ENCRYPTION_KEY="<从 Secret Manager 读取的值>"
+export API_KEY="<从 Secret Manager 读取的独立 API key>"
 go run .
 ```
 

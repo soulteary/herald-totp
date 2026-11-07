@@ -35,6 +35,8 @@ For the v2.0.0 module and HMAC breaking changes, follow the [v2 migration guide]
 | RATE_LIMIT_PER_SUBJECT | 20 | Positive request limit per subject in a fixed one-hour window starting with the first request. |
 | RATE_LIMIT_PER_IP | 30 | Positive request limit per IP in a fixed one-minute window starting with the first request. |
 
+At least one API-key or HMAC credential must be configured for usable business calls. Each individual credential is optional because another scheme can be selected; starting without both schemes does not enable anonymous access. The startup example below must also load the selected credential from the secret manager.
+
 All validation failures are reported together and the process exits before
 opening the listen socket or initializing Redis.
 
@@ -64,6 +66,7 @@ the same value on every start:
 
 # Every service start reads the already-provisioned value.
 export HERALD_TOTP_ENCRYPTION_KEY="<value loaded from the secret manager>"
+export API_KEY="<independent API key loaded from the secret manager>"
 go run .
 ```
 
