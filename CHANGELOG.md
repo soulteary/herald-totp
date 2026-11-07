@@ -7,6 +7,18 @@ The project follows [Semantic Versioning](https://semver.org/). Dates use the
 
 ## [Unreleased]
 
+### Fixed
+
+- Bind TOTP counter/challenge commits to the enabled credential snapshot used
+  for code validation. A changed encrypted secret, creation time or TOTP
+  parameter rejects the stale commit without advancing the replacement record
+  or consuming its challenge. Counter progress on the same credential remains
+  supported, and the snapshot check is repeated after transaction conflicts.
+- Existing credential records, SDK methods and HTTP success payloads are
+  unchanged. Replace all service instances to obtain the commit guard; older
+  instances and rollback retain the earlier unbound commit behavior. Preserve
+  Redis data, encryption keys and replay records during either direction.
+
 ## [2.0.1] - 2026-11-07
 
 ### Fixed

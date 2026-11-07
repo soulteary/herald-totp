@@ -99,3 +99,16 @@ state remains readable, but that rollback restores the unbounded confirmation
 path. Rollback to a pre-v2 release also loses the authentication safeguards and
 must follow the major-version restrictions above; do not downgrade it as an
 independent response to a gateway failure.
+
+## Credential-snapshot commit guard (unreleased)
+
+The verification commit guard added after v2.0.1 compares the enabled credential
+and its validation parameters with the snapshot used to validate the code. A
+changed record rejects the commit without advancing that record or claiming the
+challenge. Concurrent counter progress on the same credential remains supported.
+There is no credential format, key, HTTP success payload or SDK migration.
+
+Replace all TOTP service instances to obtain this guard. Mixed older instances
+retain the earlier commit behavior; rollback restores it. Preserve the existing
+Redis dataset, encryption key and replay state. This does not cancel requests
+that committed before a credential change.
