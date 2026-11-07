@@ -14,7 +14,7 @@ v2.0.0 模块和 HMAC 协议迁移请参阅 [v2 指南](MIGRATION_V2.md)。下�
 - [解除绑定返回 400 或 429](#解除绑定返回-400-或-429)
 - [绑定响应无 secret_base32](#绑定响应无-secret_base32)
 - [Redis 连接错误](#redis-连接错误)
-- [Stargate 无法访问 herald-totp](#stargate-无法访问-herald-totp)
+- [Herald 无法访问 herald-totp](#herald-无法访问-herald-totp)
 
 ## 服务因配置无效无法启动
 
@@ -46,18 +46,18 @@ herald-totp 已配置 `API_KEY`（或 HMAC），但请求未携带对应头或�
 
 ### 处理
 
-1. **若使用 API Key**  
-   - 在 herald-totp 设置 `API_KEY`。  
-   - 在 Stargate 设置 `HERALD_TOTP_API_KEY` 为相同值，Stargate 会通过 `X-API-Key` 发送。  
+1. **若使用 API Key**
+   - 在 herald-totp 设置 `API_KEY`。
+   - 在 Herald 设置 `HERALD_TOTP_API_KEY` 为相同值，Herald 会通过 `X-API-Key` 发送。
    - 确认中间代理/网关未丢弃 `X-API-Key` 头。
 
-2. **若使用 HMAC**  
-   - 在 herald-totp 设置 `HMAC_SECRET` 或 `HERALD_TOTP_HMAC_KEYS`。  
-   - 在 Stargate 配置相同密钥（或密钥映射），并确保请求签名使用 `X-Timestamp`、`X-Service`、`X-Signature`。  
-   - 检查 Stargate 与 herald-totp 的时钟偏差在可接受范围内（如 60 秒）。
+2. **若使用 HMAC**
+   - 在 herald-totp 设置 `HMAC_SECRET` 或 `HERALD_TOTP_HMAC_KEYS`。
+   - 在 Herald 配置相同密钥（或密钥映射），并确保请求签名使用 `X-Signature-Version: v2`、`X-Timestamp`、`X-Service`、`X-Nonce`、`X-Signature`。
+   - 检查 Herald 与 herald-totp 的时钟偏差在可接受范围内（如 60 秒）。
 
-3. **若开发环境不需要鉴权**  
-   - 在 herald-totp 不设置 `API_KEY` 与 HMAC（Stargate 侧也不配置 herald-totp 鉴权）。仅限非生产环境。
+3. **本地开发**
+   - 为 herald-totp 与 Herald 代理配置合成 API key 或 HMAC 凭据。未配置凭据时，业务接口仍拒绝匿名请求。
 
 ---
 
@@ -158,7 +158,7 @@ enroll/confirm 接受的验证码也会被记录为已消费。使用该验证�
 
 ---
 
-## Stargate 无法访问 herald-totp
+## Herald 无法访问 herald-totp
 
 ### 现象
 
@@ -166,10 +166,10 @@ enroll/confirm 接受的验证码也会被记录为已消费。使用该验证�
 
 ### 处理
 
-1. 确认 Stargate 的 `HERALD_TOTP_BASE_URL` 指向正确的 herald-totp 地址（如 Docker Compose 中 `http://herald-totp:8084`）。
+1. 确认 Herald 的 `HERALD_TOTP_BASE_URL` 指向正确的 herald-totp 地址（如 Docker Compose 中 `http://herald-totp:8084`）。
 2. 确认 herald-totp 已启动并在预期端口监听（默认 8084）。检查 `PORT` 环境变量与容器端口映射。
-3. 若 Stargate 与 herald-totp 不在同一网络，确保 DNS 或服务发现能解析主机名，且防火墙/安全组放行对应端口。
-4. 若使用 HTTPS，确保证书有效且 Stargate 信任（或仅在开发环境使用 insecure_skip_verify）。
+3. 若 Herald 与 herald-totp 不在同一网络，确保 DNS 或服务发现能解析主机名，且防火墙/安全组放行对应端口。
+4. 若使用 HTTPS，确保证书有效且 Herald 代理信任该证书。
 
 ## 关闭超过截止时间
 

@@ -15,7 +15,7 @@ When `API_KEY` or `HMAC_SECRET` / `HERALD_TOTP_HMAC_KEYS` is set, callers (e.g. 
 - **API Key**: send `X-API-Key` header with the same value.
 - **HMAC v2**: use `heraldtotp.SignRequest` and the operation-bound [v2 protocol](SIGNATURE_V2.md). The method, escaped path, query, key ID, timestamp, service, nonce and body hash are authenticated. Legacy body-only signatures are rejected.
 
-If neither is set, no authentication is required (dev only).
+Business routes always require valid credentials. With neither configured, requests still return `401 unauthorized`. Health and metrics endpoints are independent of business authentication.
 
 ## Go client
 

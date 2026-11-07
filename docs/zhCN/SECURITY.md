@@ -11,15 +11,15 @@
 ## API Key 与 HMAC
 
 - 配置 **API_KEY** 后，herald-totp 会要求所有受保护接口（enroll、verify、revoke、status）的请求头 `X-API-Key` 与之一致。请使用足够强且唯一的密钥并妥善保管。
-- Stargate 侧需配置相同的 `HERALD_TOTP_API_KEY`，以便在请求 herald-totp 时携带该密钥。
-- 也可使用 **HMAC_SECRET** 或 **HERALD_TOTP_HMAC_KEYS**（JSON 密钥映射，支持轮换）。Stargate 须使用相同密钥对请求签名并发送 `X-Timestamp`、`X-Service`、`X-Signature`；密钥映射包含多个密钥时必须发送 `X-Key-Id`，只有单一映射密钥时才可省略。
+- Herald 侧需配置相同的 `HERALD_TOTP_API_KEY`，以便在请求 herald-totp 时携带该密钥。
+- 也可使用 **HMAC_SECRET** 或 **HERALD_TOTP_HMAC_KEYS**（JSON 密钥映射，支持轮换）。Herald 须使用相同密钥对请求签名并发送 `X-Signature-Version: v2`、`X-Timestamp`、`X-Service`、`X-Nonce`、`X-Signature`；密钥映射包含多个密钥时必须发送 `X-Key-Id`，只有单一映射密钥时才可省略。
 - 不要将 API Key 或 HMAC 密钥写入日志或对外暴露。优先使用环境变量或密钥管理服务，避免将密钥写入并提交到仓库的配置文件中。
 
 ## 生产环境建议
 
 - **运行策略**：当前显式 nonce 的 AES-GCM 编码不支持 Go `GODEBUG=fips140=only` 模式，加解密会返回错误。这是原有运行限制；测试覆盖了 [Go GCM 策略拒绝路径](https://go.dev/src/crypto/cipher/gcm.go)。
-- **网络**：将 herald-totp 部署在内网或私有网络中，仅允许 Stargate（或统一网关）访问；不要将 herald-totp 直接暴露到公网，除非在 HTTPS 与严格访问控制之后。
-- **HTTPS**：若 herald-totp 会经过公网或不可信网络被访问，应在其前增加带 TLS 的反向代理（如 Traefik、nginx）。此时 Stargate 的 `HERALD_TOTP_BASE_URL` 应使用 `https://`。
+- **网络**：将 herald-totp 部署在内网或私有网络中，仅允许 Herald（或其他授权服务）访问；不要将 herald-totp 直接暴露到公网，除非在 HTTPS 与严格访问控制之后。
+- **HTTPS**：若 herald-totp 会经过公网或不可信网络被访问，应在其前增加带 TLS 的反向代理（如 Traefik、nginx）。此时 Herald 的 `HERALD_TOTP_BASE_URL` 应使用 `https://`。
 - **最小权限**：使用非 root 用户运行进程。官方容器已配置为数值用户和用户组 `10001:10001`。
 - **Redis**：建议为 herald-totp 使用独立 Redis 实例或独立 DB 索引。启用 Redis 认证与 TLS（若可用）。不要将 Redis 暴露到公网。
 - **日志**：避免记录可能包含 TOTP 码或恢复码的请求体或请求头；仅记录运维与排查所需字段（如 subject、result、reason）即可。
@@ -38,6 +38,6 @@
 ## 小结
 
 - **HERALD_TOTP_ENCRYPTION_KEY**（32 字节）须严格保密，不写入代码或提交的配置。
-- 生产环境建议配置 **API_KEY** 或 HMAC 用于服务间鉴权；Stargate 侧配置与之一致。
+- 生产环境建议配置 **API_KEY** 或 HMAC 用于服务间鉴权；Herald 侧配置与之一致。
 - 尽量在内网部署 herald-totp，对外暴露时使用 HTTPS 与访问控制。
 - Redis 建议启用认证与 TLS。

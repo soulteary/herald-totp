@@ -2,7 +2,7 @@
 
 # herald-totp API 文档
 
-herald-totp 是 TOTP 双因素认证服务：**绑定（enroll）**、**验证（verify）**、以及可选的**恢复码（backup codes）**。不实现“发送”通道；由 Stargate（或登录服务）调用，提供按用户的 TOTP。
+herald-totp 是 TOTP 双因素认证服务：**绑定（enroll）**、**验证（verify）**、以及可选的**恢复码（backup codes）**。不实现“发送”通道；由 Herald 代理 Stargate 请求（独立服务也可直接调用），提供按用户的 TOTP。
 
 ## Base URL
 
@@ -15,9 +15,9 @@ http://localhost:8084
 当配置了 `API_KEY` 或 `HMAC_SECRET` / `HERALD_TOTP_HMAC_KEYS` 时，调用方（如代理 Stargate 请求的 Herald）必须鉴权：
 
 - **API Key**：请求头 `X-API-Key` 与配置一致。
-- **HMAC**：发送请求头 `X-Timestamp`、`X-Service`、`X-Signature`。时间戳使用 Unix 秒，body 是请求体的原始字节序列（无请求体时为空），签名是 `HMAC-SHA256(secret, timestamp + ":" + service + ":" + body)` 的小写十六进制编码。当 `HERALD_TOTP_HMAC_KEYS` 包含多个密钥时必须发送 `X-Key-Id`；仅配置一个映射密钥时可省略。
+- **HMAC v2**：使用 `heraldtotp.SignRequest` 和[操作绑定的 v2 协议](../enUS/SIGNATURE_V2.md)。发送 `X-Signature-Version: v2`、`X-Timestamp`、`X-Service`、`X-Nonce`、`X-Signature`；多密钥映射还须发送 `X-Key-Id`，单项映射可省略。签名绑定方法、转义路径、原始查询、key ID、时间戳、服务名、nonce 和请求体哈希，按字节长度分帧。旧的 body-only 签名会被拒绝。
 
-若均未配置，则不鉴权（仅开发环境）。
+业务接口始终要求有效凭据；两类凭据均未配置时，请求仍返回 `401 unauthorized`。健康和指标接口独立于业务鉴权。
 
 ## Go 客户端
 

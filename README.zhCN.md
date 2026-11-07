@@ -42,19 +42,19 @@ sequenceDiagram
 
   Note over User,Redis: 绑定流程（登录后）
   User->>Stargate: 打开 TOTP 绑定页
-  Stargate->>HeraldTotp: POST /v1/enroll/start (subject)
+  Stargate->>HeraldTotp: Via Herald: POST /v1/enroll/start (subject)
   HeraldTotp->>Redis: 存临时绑定状态
   HeraldTotp-->>Stargate: enroll_id, otpauth_uri
   Stargate-->>User: 展示二维码
   User->>Stargate: 输入 TOTP 码
-  Stargate->>HeraldTotp: POST /v1/enroll/confirm (enroll_id, code)
+  Stargate->>HeraldTotp: Via Herald: POST /v1/enroll/confirm (enroll_id, code)
   HeraldTotp->>Redis: 保存凭证、backup_codes
   HeraldTotp-->>Stargate: backup_codes
   Stargate-->>User: 绑定完成
 
   Note over User,Redis: 登录流程（TOTP 步骤）
   User->>Stargate: 提交 TOTP 或恢复码
-  Stargate->>HeraldTotp: POST /v1/verify (subject, code)
+  Stargate->>HeraldTotp: Via Herald: POST /v1/verify (subject, code)
   HeraldTotp->>Redis: 读取凭证并校验
   HeraldTotp-->>Stargate: ok, subject, amr, issued_at
   Stargate-->>User: 创建会话
@@ -87,9 +87,10 @@ sequenceDiagram
 
 更多见 [docs/zhCN/DEPLOYMENT.md](docs/zhCN/DEPLOYMENT.md)。
 
-## Stargate 侧配置
+## Stargate 与 Herald 配置
 
-- 设置 `HERALD_TOTP_ENABLED=true`、`HERALD_TOTP_BASE_URL=http://herald-totp:8084`，以及 `HERALD_TOTP_API_KEY` 或 `HERALD_TOTP_HMAC_SECRET` 与 herald-totp 保持一致。
+- 在 Stargate 启用 `HERALD_TOTP_ENABLED=true`，并配置其 Herald 连接。
+- 在 Herald 配置 `HERALD_TOTP_ENABLED=true`、`HERALD_TOTP_BASE_URL=http://herald-totp:8084`，以及与后端匹配的 `HERALD_TOTP_API_KEY` 或 `HERALD_TOTP_HMAC_SECRET`。调用链为 Stargate → Herald → herald-totp；后端连接地址与凭据由 Herald 持有。
 
 ## 快速开始
 
@@ -120,7 +121,7 @@ docker run -d --name herald-totp --network herald-totp -p 8084:8084 --stop-timeo
   herald-totp
 ```
 
-可选：添加 `-e API_KEY=your_shared_secret`，并在 Stargate 侧将 `HERALD_TOTP_API_KEY` 设为相同值。
+可选：添加 `-e API_KEY=your_shared_secret`，并在 Herald 侧将 `HERALD_TOTP_API_KEY` 设为相同值。
 
 正式版本镜像同时发布到 GHCR。部署时建议使用不可变版本标签，例如
 `ghcr.io/soulteary/herald-totp:v2.0.0`。

@@ -14,7 +14,7 @@ This guide helps you diagnose and resolve common issues with herald-totp.
 - [Revoke Returns 400 or 429](#revoke-returns-400-or-429)
 - [Enroll Response: No secret_base32](#enroll-response-no-secret_base32)
 - [Redis Connection Errors](#redis-connection-errors)
-- [Stargate Cannot Reach herald-totp](#stargate-cannot-reach-herald-totp)
+- [Herald Cannot Reach herald-totp](#herald-cannot-reach-herald-totp)
 
 ## Service Fails to Start (invalid configuration)
 
@@ -46,18 +46,18 @@ herald-totp has `API_KEY` (or HMAC) set, but the request either does not send th
 
 ### Solutions
 
-1. **If you use API Key**  
-   - Set `API_KEY` on herald-totp.  
-   - Set `HERALD_TOTP_API_KEY` on Stargate to the same value so Stargate sends it in `X-API-Key`.  
+1. **If you use API Key**
+   - Set `API_KEY` on herald-totp.
+   - Set `HERALD_TOTP_API_KEY` on Herald to the same value so Herald sends it in `X-API-Key`.
    - Ensure no proxy or gateway strips the `X-API-Key` header.
 
-2. **If you use HMAC**  
-   - Set `HMAC_SECRET` or `HERALD_TOTP_HMAC_KEYS` on herald-totp.  
-   - Configure Stargate with the same secret (or key map) and ensure it signs requests with `X-Timestamp`, `X-Service`, `X-Signature`.  
-   - Check that clock skew between Stargate and herald-totp is within the accepted window (e.g. 60 seconds).
+2. **If you use HMAC**
+   - Set `HMAC_SECRET` or `HERALD_TOTP_HMAC_KEYS` on herald-totp.
+   - Configure Herald with the same secret (or key map) and ensure it signs requests with `X-Signature-Version: v2`, `X-Timestamp`, `X-Service`, `X-Nonce`, `X-Signature`.
+   - Check that clock skew between Herald and herald-totp is within the accepted window (e.g. 60 seconds).
 
-3. **If you do not want auth in dev**  
-   - Leave `API_KEY` and HMAC unset on herald-totp (and do not set Stargate auth for herald-totp). Use only in non-production environments.
+3. **For local development**
+   - Configure synthetic API-key or HMAC credentials on herald-totp and the Herald proxy. Business routes still reject anonymous requests when credentials are unset.
 
 ---
 
@@ -159,7 +159,7 @@ authenticator to enter the next TOTP period before using it for verify.
 
 ---
 
-## Stargate Cannot Reach herald-totp
+## Herald Cannot Reach herald-totp
 
 ### Symptoms
 
@@ -167,10 +167,10 @@ authenticator to enter the next TOTP period before using it for verify.
 
 ### Solutions
 
-1. Confirm `HERALD_TOTP_BASE_URL` on Stargate points to the correct herald-totp URL (e.g. `http://herald-totp:8084` in Docker Compose).
+1. Confirm `HERALD_TOTP_BASE_URL` on Herald points to the correct herald-totp URL (e.g. `http://herald-totp:8084` in Docker Compose).
 2. Ensure herald-totp is running and listening on the expected port (default 8084). Check `PORT` env and container port mapping.
-3. If Stargate and herald-totp are in different networks, ensure DNS or service discovery resolves the hostname and that firewall/security groups allow traffic on the port.
-4. If using HTTPS, ensure the certificate is valid and Stargate trusts it (or use `insecure_skip_verify` only for dev).
+3. If Herald and herald-totp are in different networks, ensure DNS or service discovery resolves the hostname and that firewall/security groups allow traffic on the port.
+4. If using HTTPS, ensure the certificate is valid and trusted by the Herald proxy.
 
 ## Shutdown deadline exceeded
 

@@ -10,16 +10,16 @@ This document describes security considerations and recommendations for herald-t
 
 ## API Key and HMAC
 
-- When **API_KEY** is set, herald-totp requires the `X-API-Key` header to match for all protected endpoints (enroll, verify, revoke, and status). Use a strong, unique value and keep it secret.
-- Stargate must be configured with the same value as `HERALD_TOTP_API_KEY` so that it sends the key on every request to herald-totp.
-- Alternatively, use **HMAC_SECRET** or **HERALD_TOTP_HMAC_KEYS** (JSON map for key rotation). Stargate must sign requests with the same secret and send `X-Timestamp`, `X-Service`, `X-Signature`, and `X-Key-Id` when the map contains multiple keys. `X-Key-Id` may be omitted only for a single mapped key.
+- For API-key authentication, herald-totp requires a matching `X-API-Key` on protected endpoints (enroll, verify, revoke, and status). Use a strong, unique value and keep it secret.
+- Herald must be configured with the same value as `HERALD_TOTP_API_KEY` so that it sends the key on every request to herald-totp.
+- Alternatively, use **HMAC_SECRET** or **HERALD_TOTP_HMAC_KEYS** (JSON map for key rotation). Herald must sign requests with the same secret and send `X-Signature-Version: v2`, `X-Timestamp`, `X-Service`, `X-Nonce`, `X-Signature`, and `X-Key-Id` when the map contains multiple keys. `X-Key-Id` may be omitted only for a single mapped key.
 - Do not log or expose API key or HMAC secrets. Prefer environment variables or a secret manager over config files committed to source control.
 
 ## Production Recommendations
 
 - **Runtime policy**: The current explicit-nonce AES-GCM encoding is unsupported under Go `GODEBUG=fips140=only`; encryption and decryption return errors. This is an existing operating limit; the tests cover the [Go GCM policy rejection](https://go.dev/src/crypto/cipher/gcm.go).
-- **Network**: Run herald-totp in a private network. Only Stargate (or your gateway) should call it; do not expose herald-totp directly to the public internet unless behind HTTPS and strict access control.
-- **HTTPS**: If herald-totp is reachable over the internet or across untrusted networks, put it behind a reverse proxy (e.g. Traefik, nginx) with TLS. Stargate should use `https://` for `HERALD_TOTP_BASE_URL` in that case.
+- **Network**: Run herald-totp in a private network. Only Herald (or another authorized service) should call it; do not expose herald-totp directly to the public internet unless behind HTTPS and strict access control.
+- **HTTPS**: If herald-totp is reachable over the internet or across untrusted networks, put it behind a reverse proxy (e.g. Traefik, nginx) with TLS. Herald should use `https://` for `HERALD_TOTP_BASE_URL` in that case.
 - **Least privilege**: Run the process with a non-root user. The official container is configured as the numeric user and group `10001:10001`.
 - **Redis**: Use a dedicated Redis instance or DB index for herald-totp. Enable Redis AUTH and TLS when available. Do not expose Redis to the public.
 - **Logging**: Avoid logging request bodies or headers that may contain TOTP codes or backup codes. Structured logs (e.g. subject, result, reason) are sufficient for operations and troubleshooting.
@@ -38,7 +38,7 @@ This document describes security considerations and recommendations for herald-t
 ## Summary
 
 - Use **HERALD_TOTP_ENCRYPTION_KEY** (32 bytes) and keep it secret; never in code or committed config.
-- Use **API_KEY** or HMAC in production for service-to-service auth; configure Stargate to match.
+- Use **API_KEY** or HMAC in production for service-to-service auth; configure Herald to match.
 - Prefer private network and HTTPS in front of herald-totp; do not expose it publicly without protection.
 - Protect Redis with auth and TLS where possible.
 

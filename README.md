@@ -43,19 +43,19 @@ sequenceDiagram
 
   Note over User,Redis: Bind flow (after login)
   User->>Stargate: Open TOTP enroll page
-  Stargate->>HeraldTotp: POST /v1/enroll/start (subject)
+  Stargate->>HeraldTotp: Via Herald: POST /v1/enroll/start (subject)
   HeraldTotp->>Redis: Store temp enrollment
   HeraldTotp-->>Stargate: enroll_id, otpauth_uri
   Stargate-->>User: Show QR code
   User->>Stargate: Enter TOTP code
-  Stargate->>HeraldTotp: POST /v1/enroll/confirm (enroll_id, code)
+  Stargate->>HeraldTotp: Via Herald: POST /v1/enroll/confirm (enroll_id, code)
   HeraldTotp->>Redis: Save credential, backup_codes
   HeraldTotp-->>Stargate: backup_codes
   Stargate-->>User: Bind done
 
   Note over User,Redis: Login flow (TOTP step)
   User->>Stargate: Submit TOTP or backup code
-  Stargate->>HeraldTotp: POST /v1/verify (subject, code)
+  Stargate->>HeraldTotp: Via Herald: POST /v1/verify (subject, code)
   HeraldTotp->>Redis: Read credential, verify
   HeraldTotp-->>Stargate: ok, subject, amr, issued_at
   Stargate-->>User: Session created
@@ -90,7 +90,8 @@ See [docs/enUS/DEPLOYMENT.md](docs/enUS/DEPLOYMENT.md) for full options.
 
 ## Stargate integration
 
-- Set `HERALD_TOTP_ENABLED=true`, `HERALD_TOTP_BASE_URL=http://herald-totp:8084`, and `HERALD_TOTP_API_KEY` or `HERALD_TOTP_HMAC_SECRET` to match herald-totp.
+- Enable `HERALD_TOTP_ENABLED=true` on Stargate and configure its Herald connection.
+- On Herald, set `HERALD_TOTP_ENABLED=true`, `HERALD_TOTP_BASE_URL=http://herald-totp:8084`, and matching `HERALD_TOTP_API_KEY` or `HERALD_TOTP_HMAC_SECRET`. The request path is Stargate → Herald → herald-totp; Herald owns the backend address and credentials.
 
 ## Quick Start
 
@@ -122,7 +123,7 @@ docker run -d --name herald-totp --network herald-totp -p 8084:8084 --stop-timeo
   herald-totp
 ```
 
-Optional: add `-e API_KEY=your_shared_secret` and set `HERALD_TOTP_API_KEY` to the same value on Stargate.
+Optional: add `-e API_KEY=your_shared_secret` and set `HERALD_TOTP_API_KEY` to the same value on Herald.
 
 Released images are also available from GHCR. Use an immutable version tag for
 deployments, for example `ghcr.io/soulteary/herald-totp:v2.0.2`.
