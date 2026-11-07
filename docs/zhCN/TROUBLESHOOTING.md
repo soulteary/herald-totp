@@ -87,7 +87,7 @@ herald-totp 已配置 `API_KEY`（或 HMAC），但请求未携带对应头或�
 
 ### 原因与处理
 
-- **invalid**：TOTP 码或恢复码错误，或该 subject 未绑定 TOTP。确认用户输入的是当前验证器中的 6 位码或未使用过的恢复码；确认 subject（如 `user:12345`）与绑定用户一致。
+- **invalid**：TOTP 码或恢复码错误，或该 subject 未绑定 TOTP。确认用户输入的是当前验证器中与凭据配置长度一致的码（6 或 8 位，默认 6 位）或未使用过的恢复码；确认 subject（如 `user:12345`）与绑定用户一致。
 - **replay**：同一 challenge_id（或同一码在时间窗内）已被使用。每次登录使用新的 challenge_id 或不传；成功验证后不要复用 challenge_id。
 - **rate_limited**：触发按 subject 或按 IP 的限流。等待限流窗口重置，或根据环境调整 `RATE_LIMIT_PER_SUBJECT` / `RATE_LIMIT_PER_IP`。
 
@@ -105,7 +105,9 @@ enroll/confirm 接受的验证码也会被记录为已消费。使用该验证�
 ### 原因与处理
 
 - **expired**：来自 `POST /v1/enroll/start` 的 enroll_id 已过期、已被确认或因其他原因不再可用（默认 TTL 10 分钟）。需重新发起绑定：再次调用 enroll/start，让用户扫描新二维码，再向 enroll/confirm 提交新码。
-- **invalid**：提交的 6 位 TOTP 与当前临时密钥不匹配。确认用户验证器时间已同步并输入当前码；确认 TOTP 周期（默认 30 秒）与 skew 一致。
+- **invalid**：提交的 TOTP（6 或 8 位，须与注册记录一致） 与当前临时密钥不匹配。确认用户验证器时间已同步并输入当前码；确认 TOTP 周期（默认 30 秒）与 skew 一致。
+
+确认还可能因共享 subject 或来源 IP 配额耗尽返回 `429 rate_limited`。保留待确认注册，其原有效期不变；等待配额窗口，不要自动重试验证码。详见[部署配额说明](DEPLOYMENT.md)。
 
 ---
 
