@@ -125,7 +125,7 @@ docker run -d --name herald-totp --network herald-totp -p 8084:8084 --stop-timeo
 Optional: add `-e API_KEY=your_shared_secret` and set `HERALD_TOTP_API_KEY` to the same value on Stargate.
 
 Released images are also available from GHCR. Use an immutable version tag for
-deployments, for example `ghcr.io/soulteary/herald-totp:v2.0.0`.
+deployments, for example `ghcr.io/soulteary/herald-totp:v2.0.2`.
 
 ## Documentation
 

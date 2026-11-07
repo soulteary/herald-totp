@@ -7,6 +7,8 @@ The project follows [Semantic Versioning](https://semver.org/). Dates use the
 
 ## [Unreleased]
 
+## [2.0.2] - 2026-11-07
+
 ### Fixed
 
 - Bind TOTP counter/challenge commits to the enabled credential snapshot used
@@ -14,10 +16,16 @@ The project follows [Semantic Versioning](https://semver.org/). Dates use the
   parameter rejects the stale commit without advancing the replacement record
   or consuming its challenge. Counter progress on the same credential remains
   supported, and the snapshot check is repeated after transaction conflicts.
+
+### Compatibility and operations
+
 - Existing credential records, SDK methods and HTTP success payloads are
   unchanged. Replace all service instances to obtain the commit guard; older
   instances and rollback retain the earlier unbound commit behavior. Preserve
   Redis data, encryption keys and replay records during either direction.
+- Keep the existing JSON requirements, HMAC v2 signing and nonce protocol, and
+  shared quota policy. No data conversion or TOTP re-enrollment is required.
+  The guard does not cancel requests committed before the credential changed.
 
 ## [2.0.1] - 2026-11-07
 

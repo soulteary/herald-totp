@@ -100,9 +100,9 @@ path. Rollback to a pre-v2 release also loses the authentication safeguards and
 must follow the major-version restrictions above; do not downgrade it as an
 independent response to a gateway failure.
 
-## Credential-snapshot commit guard (unreleased)
+## Patch upgrade from v2.0.1 to v2.0.2
 
-The verification commit guard added after v2.0.1 compares the enabled credential
+The v2.0.2 verification commit guard compares the enabled credential
 and its validation parameters with the snapshot used to validate the code. A
 changed record rejects the commit without advancing that record or claiming the
 challenge. Concurrent counter progress on the same credential remains supported.
@@ -112,3 +112,15 @@ Replace all TOTP service instances to obtain this guard. Mixed older instances
 retain the earlier commit behavior; rollback restores it. Preserve the existing
 Redis dataset, encryption key and replay state. This does not cancel requests
 that committed before a credential change.
+
+Pin `ghcr.io/soulteary/herald-totp:v2.0.2` when replacing service instances.
+Go callers can update with `go get github.com/soulteary/herald-totp/v2@v2.0.2`;
+the SDK wire contract and `/v1` HTTP routes are unchanged. The JSON POST,
+HMAC v2 signing, nonce lifetime and shared quota rules remain in force.
+No credential re-enrollment or Redis conversion is needed. Keep existing
+pending enrollments and their expiry, quota windows and replay records.
+
+A rolling replacement is storage-compatible, but the guard is effective only
+for verification requests handled by new instances. Rollback to v2.0.1 reads
+the same state and removes the snapshot guard; it does not undo a completed
+verification or restore consumed codes and challenges.
