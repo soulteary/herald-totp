@@ -109,7 +109,7 @@ result, err := client.Verify(ctx, &heraldtotp.VerifyRequest{
 | 字段      | 类型   | 必填 | 说明            |
 |-----------|--------|------|-----------------|
 | enroll_id| string | 是  | 来自 enroll/start。 |
-| code     | string | 是  | 6 位 TOTP 码。  |
+| code     | string | 是  | 注册记录配置长度的 TOTP 码（6 或 8 位，默认 6 位）。  |
 
 **响应（200）：**
 ```json
@@ -120,7 +120,9 @@ result, err := client.Verify(ctx, &heraldtotp.VerifyRequest{
 }
 ```
 
-**错误：** `400 expired`、`400 invalid`、`409 already_enrolled` 或 `500 internal_error`。
+**错误：** `400 invalid_request`、`400 expired`、`400 invalid`、`409 already_enrolled`、`429 rate_limited`、`500 config_error` 或 `500 internal_error`。
+
+确认使用与开始注册等操作共享的 subject/IP 配额。`429` 不消耗或删除待确认注册；保留 `enroll_id`，在配额允许且注册未过期时由用户重新提交，不要自动重试验证码。未知注册 ID 也计入来源 IP 配额。配额窗口与完整流程预算见[部署指南](DEPLOYMENT.md)。
 
 ---
 
@@ -135,7 +137,7 @@ result, err := client.Verify(ctx, &heraldtotp.VerifyRequest{
 | 字段         | 类型   | 必填 | 说明                                |
 |--------------|--------|------|-------------------------------------|
 | subject      | string | 是  | 用户标识。                          |
-| code         | string | 是  | 6 位 TOTP 或恢复码（如 ABCD-EFGH-JKLM-NPQR）。 |
+| code         | string | 是  | 凭据配置长度的 TOTP（6 或 8 位，默认 6 位）或恢复码（如 ABCD-EFGH-JKLM-NPQR）。 |
 | challenge_id | string | 否  | 可选；用于防重放/审计（一次性）。   |
 
 服务会记录 `TOTP_SKEW` 容差窗口内实际匹配的 TOTP 时间步，并在 Redis 中原子认领。

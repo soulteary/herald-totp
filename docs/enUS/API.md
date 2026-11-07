@@ -108,7 +108,7 @@ TOTP period before using the authenticator for `/v1/verify`.
 | Field     | Type   | Required | Description           |
 |----------|--------|----------|-----------------------|
 | enroll_id| string | Yes      | From enroll/start.    |
-| code     | string | Yes      | 6-digit TOTP code.    |
+| code     | string | Yes      | TOTP code matching the enrollment record (6 or 8 digits; default 6).    |
 
 **Response (200):**
 ```json
@@ -119,7 +119,9 @@ TOTP period before using the authenticator for `/v1/verify`.
 }
 ```
 
-**Errors:** `400 expired`, `400 invalid`, `409 already_enrolled`, or `500 internal_error`.
+**Errors:** `400 invalid_request`, `400 expired`, `400 invalid`, `409 already_enrolled`, `429 rate_limited`, `500 config_error`, or `500 internal_error`.
+
+Confirmation shares subject/IP quotas with enrollment start and other operations. A `429` does not consume or delete the pending enrollment. Retain `enroll_id` for a user-initiated retry when quota permits and the enrollment has not expired; do not automatically retry a code. Unknown enrollment IDs also count against the source IP budget. See [deployment guidance](DEPLOYMENT.md) for windows and complete-flow budgets.
 
 ---
 
@@ -134,7 +136,7 @@ Verify a TOTP code (or backup code) for login.
 | Field        | Type   | Required | Description                                |
 |-------------|--------|----------|--------------------------------------------|
 | subject     | string | Yes      | User identifier.                          |
-| code        | string | Yes      | 6-digit TOTP or backup code (e.g. ABCD-EFGH-JKLM-NPQR). |
+| code        | string | Yes      | TOTP matching the credential (6 or 8 digits; default 6) or backup code (e.g. ABCD-EFGH-JKLM-NPQR). |
 | challenge_id| string | No       | Optional; for replay/audit (one-time use). |
 
 The service records the exact TOTP time step matched within `TOTP_SKEW` and

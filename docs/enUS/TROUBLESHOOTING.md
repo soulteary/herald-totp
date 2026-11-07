@@ -88,7 +88,7 @@ herald-totp has `API_KEY` (or HMAC) set, but the request either does not send th
 
 ### Causes and Solutions
 
-- **invalid**: The TOTP code or backup code is wrong, or the subject has no TOTP enrolled. Ensure the user enters the current 6-digit code from their authenticator app, or a valid unused backup code. Check that the subject (e.g. `user:12345`) matches the enrolled user.
+- **invalid**: The TOTP code or backup code is wrong, or the subject has no TOTP enrolled. Ensure the user enters the code matching the credential’s configured length (6 or 8 digits; default 6) from their authenticator app, or a valid unused backup code. Check that the subject (e.g. `user:12345`) matches the enrolled user.
 - **replay**: The same challenge_id (or same code in a time window) was already used. Ensure each login attempt uses a new challenge_id or omit it; do not reuse a challenge_id after successful verify.
 - **rate_limited**: Per-subject or per-IP rate limit exceeded. Wait for the rate limit window to reset, or adjust `RATE_LIMIT_PER_SUBJECT` / `RATE_LIMIT_PER_IP` if appropriate for your environment.
 
@@ -106,7 +106,9 @@ authenticator to enter the next TOTP period before using it for verify.
 ### Causes and Solutions
 
 - **expired**: The enroll_id from `POST /v1/enroll/start` has expired, was already confirmed, or is otherwise no longer available (default TTL 10m). The user must start enrollment again: call enroll/start and have the user scan the new QR code, then submit the new code to enroll/confirm.
-- **invalid**: The 6-digit TOTP code submitted does not match the current TOTP for the temporary secret. Ensure the user’s authenticator app time is in sync and they enter the current code. Check that TOTP period (default 30s) and skew are consistent.
+- **invalid**: The TOTP code submitted (6 or 8 digits, matching the enrollment record) does not match the current TOTP for the temporary secret. Ensure the user’s authenticator app time is in sync and they enter the current code. Check that TOTP period (default 30s) and skew are consistent.
+
+Confirmation may also return `429 rate_limited` when its shared subject or source-IP quota is exhausted. Keep the pending enrollment; it remains subject to its original expiry. Wait for the quota window rather than automatically retrying the code. See [deployment quotas](DEPLOYMENT.md).
 
 ---
 
