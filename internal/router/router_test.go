@@ -96,7 +96,7 @@ func TestSetup_RevokeRoute(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Setup: %v", err)
 	}
-	// POST /v1/revoke with empty body: 400 (subject required) when no auth, or 401 when auth required
+	// Without valid credentials, authentication rejects the request before body validation.
 	req := httptest.NewRequest("POST", "/v1/revoke", bytes.NewReader([]byte("{}")))
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := app.Test(req)
@@ -124,7 +124,7 @@ func TestSetup_StatusRoute(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Setup: %v", err)
 	}
-	// GET /v1/status without subject: 400 when no auth, or 401 when auth required
+	// Without valid credentials, authentication rejects the request before subject validation.
 	req := httptest.NewRequest("GET", "/v1/status", nil)
 	resp, err := app.Test(req)
 	if err != nil {

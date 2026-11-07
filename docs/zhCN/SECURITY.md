@@ -10,7 +10,7 @@
 
 ## API Key 与 HMAC
 
-- 配置 **API_KEY** 后，herald-totp 会要求所有受保护接口（enroll、verify、revoke、status）的请求头 `X-API-Key` 与之一致。请使用足够强且唯一的密钥并妥善保管。
+- 使用 API key 鉴权时，受保护接口（enroll、verify、revoke、status）要求请求头 `X-API-Key` 与 **API_KEY** 一致。请使用足够强且唯一的密钥并妥善保管。
 - Herald 侧需配置相同的 `HERALD_TOTP_API_KEY`，以便在请求 herald-totp 时携带该密钥。
 - 也可使用 **HMAC_SECRET** 或 **HERALD_TOTP_HMAC_KEYS**（JSON 密钥映射，支持轮换）。Herald 须使用相同密钥对请求签名并发送 `X-Signature-Version: v2`、`X-Timestamp`、`X-Service`、`X-Nonce`、`X-Signature`；密钥映射包含多个密钥时必须发送 `X-Key-Id`，只有单一映射密钥时才可省略。
 - 不要将 API Key 或 HMAC 密钥写入日志或对外暴露。优先使用环境变量或密钥管理服务，避免将密钥写入并提交到仓库的配置文件中。
