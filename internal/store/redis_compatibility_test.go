@@ -210,3 +210,36 @@ func TestRedisCompatibilityLostCommitReply(t *testing.T) {
 		t.Fatal("retry accepted the same verification after lost acknowledgement")
 	}
 }
+
+func TestRedisCompatibilityValidatedCredentialSnapshot(t *testing.T) {
+	st, ctx, subject := realRedisCompatibilityStore(t)
+	snapshot := Credential{Subject: subject, SecretEnc: "original", Enabled: true, Period: 30, Digits: 6, Algo: "SHA1", CreatedAt: 1, LastUsedStep: 1}
+	replacement := snapshot
+	replacement.SecretEnc = "replacement"
+	requireRedisCompatibilityNoError(t, st.SaveCredential(ctx, &replacement))
+	claimed, err := st.ClaimValidatedCredentialStepAndChallenge(ctx, subject, &snapshot, 3, 3, subject)
+	requireRedisCompatibilityNoError(t, err)
+	if claimed {
+		t.Fatal("stale credential snapshot was committed")
+	}
+	stored, err := st.GetCredential(ctx, subject)
+	requireRedisCompatibilityNoError(t, err)
+	if stored == nil || *stored != replacement {
+		t.Fatalf("stale commit changed replacement: %+v", stored)
+	}
+	used, err := st.IsChallengeUsed(ctx, subject)
+	requireRedisCompatibilityNoError(t, err)
+	if used {
+		t.Fatal("stale commit consumed challenge")
+	}
+	claimed, err = st.ClaimValidatedCredentialStepAndChallenge(ctx, subject, &replacement, 3, 3, subject)
+	requireRedisCompatibilityNoError(t, err)
+	if !claimed {
+		t.Fatal("current credential snapshot was rejected")
+	}
+	used, err = st.IsChallengeUsed(ctx, subject)
+	requireRedisCompatibilityNoError(t, err)
+	if !used {
+		t.Fatal("accepted commit did not consume challenge")
+	}
+}

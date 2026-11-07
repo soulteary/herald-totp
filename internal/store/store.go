@@ -141,9 +141,35 @@ func (s *Store) ClaimCredentialStep(ctx context.Context, subject string, step, u
 
 // ClaimCredentialStepAndChallenge atomically advances the TOTP counter and,
 // when supplied, claims the challenge. Neither value changes if either one was
-// already consumed.
+// already consumed. This low-level counter operation does not bind an earlier
+// validation; authentication callers use ClaimValidatedCredentialStepAndChallenge.
 func (s *Store) ClaimCredentialStepAndChallenge(
 	ctx context.Context, subject string, step, updatedAt int64, challengeID string,
+) (bool, error) {
+	return s.claimCredentialStepAndChallenge(ctx, subject, nil, step, updatedAt, challengeID)
+}
+
+// ClaimValidatedCredentialStepAndChallenge commits a validation result only
+// while the enabled credential and its cryptographic parameters still match
+// the snapshot used for validation. Mutable counters may advance independently.
+func (s *Store) ClaimValidatedCredentialStepAndChallenge(
+	ctx context.Context, subject string, expected *Credential, step, updatedAt int64, challengeID string,
+) (bool, error) {
+	if expected == nil || expected.Subject != subject || !expected.Enabled {
+		return false, nil
+	}
+	snapshot := *expected
+	return s.claimCredentialStepAndChallenge(ctx, subject, &snapshot, step, updatedAt, challengeID)
+}
+
+func sameCredentialValidationState(current, expected *Credential) bool {
+	return current.Enabled && current.Subject == expected.Subject &&
+		current.SecretEnc == expected.SecretEnc && current.CreatedAt == expected.CreatedAt &&
+		current.Period == expected.Period && current.Digits == expected.Digits && current.Algo == expected.Algo
+}
+
+func (s *Store) claimCredentialStepAndChallenge(
+	ctx context.Context, subject string, expected *Credential, step, updatedAt int64, challengeID string,
 ) (bool, error) {
 	credentialKey := credPrefix + subject
 	challengeKey := ""
@@ -162,6 +188,9 @@ func (s *Store) ClaimCredentialStepAndChallenge(
 			var credential Credential
 			if err := json.Unmarshal(data, &credential); err != nil {
 				return err
+			}
+			if expected != nil && !sameCredentialValidationState(&credential, expected) {
+				return nil
 			}
 			if step <= credential.LastUsedStep {
 				return nil

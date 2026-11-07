@@ -142,7 +142,7 @@ func Verify(st *store.Store, log *logger.Logger) fiber.Handler {
 			})
 		}
 
-		claimed, err := st.ClaimCredentialStepAndChallenge(c.Context(), req.Subject, matchedStep, now.Unix(), req.ChallengeID)
+		claimed, err := st.ClaimValidatedCredentialStepAndChallenge(c.Context(), req.Subject, cred, matchedStep, now.Unix(), req.ChallengeID)
 		if err != nil {
 			log.Warn().Err(err).Msg("verify: claim TOTP step failed")
 			return c.Status(fiber.StatusInternalServerError).JSON(VerifyErrorResponse{
