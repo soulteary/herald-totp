@@ -26,9 +26,12 @@ The project follows [Semantic Versioning](https://semver.org/). Dates use the
   nonce protocol, shared quotas and credential-snapshot guard unchanged.
   No Redis, encryption-key or namespace migration or TOTP re-enrollment is needed.
 - Preserve pending enrollments, credentials, backup-code/counter consumption,
-  replay and quota state during upgrade or rollback. Rolling back to v2.0.2
-  restores the earlier Unicode masking behavior but retains its snapshot guard.
-  It does not undo completed operations or values already written by callers.
+  replay and quota state during upgrade or rollback. An existing v2.0.2 binary
+  or image uses the older masking dependency and retains its snapshot guard.
+  For Go application rebuilds, restore the pre-upgrade `go.mod`/`go.sum` and
+  inspect selected versions: downgrading the parent module alone may retain
+  newer dependencies. Rollback does not undo completed operations or values
+  already written by callers.
 
 ## [2.0.2] - 2026-11-07
 
