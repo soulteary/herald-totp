@@ -124,3 +124,27 @@ A rolling replacement is storage-compatible, but the guard is effective only
 for verification requests handled by new instances. Rollback to v2.0.1 reads
 the same state and removes the snapshot guard; it does not undo a completed
 verification or restore consumed codes and challenges.
+
+
+## Patch upgrade from v2.0.2 to v2.0.3
+
+Deploy `ghcr.io/soulteary/herald-totp:v2.0.3`; Go clients can select
+`github.com/soulteary/herald-totp/v2@v2.0.3`. The secure-kit v2.1.4 dependency
+fixes Unicode masking in diagnostics. ASCII output and cryptographic operations
+are unchanged. SDK methods, HTTP success payloads, HMAC v2 signatures and nonce
+identities, shared quotas and the credential-snapshot guard retain their contracts.
+
+Preserve Redis data, pending enrollments, counter/backup-code consumption,
+nonce and quota windows, namespaces and the original encryption key. No data
+conversion or re-enrollment is required. Replace instances normally; the SDK
+module update does not deploy the independent service. Reusing an existing
+v2.0.2 binary or image restores its compiled dependency behavior while keeping
+its snapshot guard and compatible state. Rollback does not undo completed
+operations or rewrite diagnostic values already stored by an application.
+
+For a Go application rebuilt from source, restore its pre-upgrade `go.mod` and
+`go.sum` snapshots, then inspect `go list -m all` before rebuilding. Lowering
+only the herald-totp version can retain a newer secure-kit selected by Go
+minimal version selection or another dependency. Verify the actual selected
+versions rather than assuming the parent downgrade restored them. Earlier-major
+rollbacks still require the coordinated migration above.

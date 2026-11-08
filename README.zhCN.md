@@ -133,7 +133,7 @@ docker run -d --name herald-totp --network herald-totp -p 8084:8084 --stop-timeo
 业务请求必须使用 API key 或 HMAC 凭据。示例生成合成 `API_KEY`，请在 Herald 将 `HERALD_TOTP_API_KEY` 配置为相同值；未提供有效凭据时返回 401。
 
 正式版本镜像同时发布到 GHCR。部署时建议使用不可变版本标签，例如
-`ghcr.io/soulteary/herald-totp:v2.0.0`。
+`ghcr.io/soulteary/herald-totp:v2.0.3`。
 
 ## 文档
 
