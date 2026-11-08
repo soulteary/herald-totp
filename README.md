@@ -135,7 +135,7 @@ docker run -d --name herald-totp --network herald-totp -p 8084:8084 --stop-timeo
 Business calls require API-key or HMAC credentials. These examples generate a synthetic `API_KEY`; set `HERALD_TOTP_API_KEY` on Herald to that same value. Requests without valid credentials return 401.
 
 Released images are also available from GHCR. Use an immutable version tag for
-deployments, for example `ghcr.io/soulteary/herald-totp:v2.0.2`.
+deployments, for example `ghcr.io/soulteary/herald-totp:v2.0.3`.
 
 ## Documentation
 

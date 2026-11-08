@@ -15,7 +15,7 @@ require (
 	github.com/soulteary/logger-kit/v3 v3.0.4
 	github.com/soulteary/metrics-kit/v3 v3.0.4
 	github.com/soulteary/redis-kit v1.8.1
-	github.com/soulteary/secure-kit/v2 v2.1.3
+	github.com/soulteary/secure-kit/v2 v2.1.4
 	github.com/soulteary/version-kit/v4 v4.0.3
 )
 

@@ -7,6 +7,29 @@ The project follows [Semantic Versioning](https://semver.org/). Dates use the
 
 ## [Unreleased]
 
+## [2.0.3] - 2026-11-08
+
+### Dependencies
+
+- Update secure-kit/v2 to the released v2.1.4. Unicode masking in diagnostic
+  fields now preserves complete code points. Existing ASCII output is unchanged;
+  cryptographic operations and TOTP validation behavior are unchanged.
+
+### Documentation
+
+- Align English and Chinese guidance with HMAC v2, required business credentials,
+  Herald proxy ownership, confirmation quotas and configured six/eight-digit codes.
+
+### Compatibility and operations
+
+- Keep the `/v2` Go module, `/v1` routes, SDK signatures, JSON records, HMAC and
+  nonce protocol, shared quotas and credential-snapshot guard unchanged.
+  No Redis, encryption-key or namespace migration or TOTP re-enrollment is needed.
+- Preserve pending enrollments, credentials, backup-code/counter consumption,
+  replay and quota state during upgrade or rollback. Rolling back to v2.0.2
+  restores the earlier Unicode masking behavior but retains its snapshot guard.
+  It does not undo completed operations or values already written by callers.
+
 ## [2.0.2] - 2026-11-07
 
 ### Fixed
