@@ -4,7 +4,7 @@ Thank you for your interest in contributing to herald-totp.
 
 ## Development
 
-- **Go version**: 1.27.3+ (see [go.mod](go.mod)).
+- **Go version**: 1.27.4+ (see [go.mod](go.mod)).
 - **Tests**: Run on Linux with `go test -race -count=1 -coverprofile=coverage.out ./...`, then `go tool cover -func=coverage.out`. Total statement coverage must stay at least 98%. Lifecycle tests execute real child processes and forward the standard Go coverage directory so their production execution is measured. Tests cover configuration, persistence, encryption, enrollment, verification, replay protection, startup and shutdown.
 - **Code style**: Follow standard Go formatting. Run `gofmt -s -w .` before committing. The CI runs `gofmt -s -l .` and fails if there are unformatted files.
 - **Static analysis**: CI runs `go vet ./...`. Run `golangci-lint run` locally before submitting.
