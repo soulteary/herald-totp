@@ -1,6 +1,6 @@
 # herald-totp
 
-[![Go Test Coverage](./.github/coverage.svg)](./.github/go-test-report.md) [![Go Report Card](./.github/goreportcard.svg)](./.github/goreportcard-report.md) [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE) [![Go Version](https://img.shields.io/badge/go-1.27.3+-blue.svg)](https://golang.org)
+[![Go Test Coverage](./.github/coverage.svg)](./.github/go-test-report.md) [![Go Report Card](./.github/goreportcard.svg)](./.github/goreportcard-report.md) [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE) [![Go Version](https://img.shields.io/badge/go-1.27.4+-blue.svg)](https://golang.org)
 
 
 
@@ -18,7 +18,7 @@ See [the migration guide](docs/enUS/MIGRATION_V2.md) before upgrading or rolling
 
 TOTP 2FA service for the Herald/Stargate stack: **enroll** (bind), **verify**, and optional **backup codes**. It does not send codes; users generate TOTP in an authenticator app (e.g. Google Authenticator). Stargate calls Herald, which proxies to herald-totp for per-user TOTP instead of a single global secret.
 
-The HTTP server currently uses Fiber v3 and kit packages (exact module versions are recorded in `go.mod`). Building from source requires Go 1.27.3 or later; `go.mod` is the authoritative source for exact dependency versions.
+The HTTP server currently uses Fiber v3 and kit packages (exact module versions are recorded in `go.mod`). Building from source requires Go 1.27.4 or later; `go.mod` is the authoritative source for exact dependency versions.
 
 ## Core Features
 

@@ -5,7 +5,7 @@ For the v2.0.0 module and HMAC breaking changes, follow the [v2 migration guide]
 
 ## Requirements
 
-- Go 1.27.3+
+- Go 1.27.4+
 - Redis (for credentials, enrollments, backup codes, rate limits)
 
 ## Environment variables
