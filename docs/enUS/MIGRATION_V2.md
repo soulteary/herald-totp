@@ -148,3 +148,24 @@ only the herald-totp version can retain a newer secure-kit selected by Go
 minimal version selection or another dependency. Verify the actual selected
 versions rather than assuming the parent downgrade restored them. Earlier-major
 rollbacks still require the coordinated migration above.
+
+
+## Patch upgrade from v2.0.3 to v2.0.4
+
+Deploy `ghcr.io/soulteary/herald-totp:v2.0.4`; Go clients can select
+`github.com/soulteary/herald-totp/v2@v2.0.4`. This release changes dependencies
+only: Go 1.27.4, Fiber v3.7.0 and current kit module releases (the changelog
+lists each version). herald-totp source code, SDK methods, HTTP payloads,
+HMAC v2 signatures, shared quotas and the credential-snapshot guard are the
+same as in v2.0.3.
+
+Preserve Redis data, namespaces and the original encryption key. No data
+conversion or re-enrollment is required. Replace instances normally; the SDK
+module update does not deploy the independent service. Rolling back to the
+v2.0.3 binary or image restores its compiled Go runtime and dependencies and
+reads the same state.
+
+The module now declares `go 1.27.4`, so a Go application that imports v2.0.4
+must be built with Go 1.27.4 or later. When rolling such an application back,
+restore its pre-upgrade `go.mod` and `go.sum` and inspect `go list -m all`
+before rebuilding, as described for v2.0.3 above.
