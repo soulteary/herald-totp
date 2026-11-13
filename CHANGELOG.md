@@ -7,6 +7,32 @@ The project follows [Semantic Versioning](https://semver.org/). Dates use the
 
 ## [Unreleased]
 
+## [2.0.4] - 2026-11-13
+
+### Dependencies
+
+- Require Go 1.27.4 (previously 1.27.3) in `go.mod` and build the container
+  image with `golang:1.27.4-alpine3.24`. Go 1.27.4 is a security release and
+  includes the net/http fix for GO-2026-6859.
+- Update Fiber from v3.6.1 to v3.7.0.
+- Update kit modules: cli-kit v1.9.3 to v1.9.4, health-kit/v4 v4.0.5 to v4.0.7,
+  logger-kit/v3 v3.0.4 to v3.0.6, metrics-kit/v3 v3.0.4 to v3.0.6, redis-kit
+  v1.8.1 to v1.8.2, secure-kit/v2 v2.1.4 to v2.1.5 and version-kit/v4 v4.0.3
+  to v4.0.5.
+- Refresh indirect modules: gofiber/schema v1.9.2 to v1.9.3, gofiber/utils/v2
+  v2.6.3 to v2.6.4, fasthttp v1.77.0 to v1.78.0, golang.org/x/crypto v0.58.0
+  to v0.59.0, x/sys v0.49.0 to v0.50.0, x/term v0.47.0 to v0.48.0 and x/text
+  v0.43.0 to v0.44.0.
+
+### Compatibility and operations
+
+- This release contains no changes to herald-totp source code. The `/v2` Go
+  module path, `/v1` routes, SDK signatures, configuration and stored records
+  are the same as in v2.0.3; no Redis, encryption-key or namespace migration
+  or TOTP re-enrollment is needed.
+- Building from source, or importing the Go module, now requires Go 1.27.4 or
+  later.
+
 ## [2.0.3] - 2026-11-08
 
 ### Dependencies
