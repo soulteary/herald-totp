@@ -33,6 +33,8 @@
 - `internal/store/store.go`
   - Line 327: cyclomatic complexity 19 for function (*Store).ConfirmEnrollment
   - Line 483: cyclomatic complexity 17 for function (*Store).ConsumeBackupCodeAndClaimChallenge
+- `internal/requestauth/auth.go`
+  - Line 65: cyclomatic complexity 18 for function verify
 - `internal/handler/confirm_rate_limit_test.go`
   - Line 20: cyclomatic complexity 38 for function TestEnrollConfirmRateLimitsBeforeCredentialMutation
 - `internal/handler/verify.go`
@@ -41,8 +43,6 @@
   - Line 138: cyclomatic complexity 20 for function TestClient_Status_Verify_Revoke
 - `internal/handler/enroll.go`
   - Line 127: cyclomatic complexity 20 for function EnrollConfirm
-- `internal/requestauth/auth.go`
-  - Line 65: cyclomatic complexity 18 for function verify
 
 ---
 
